@@ -1,0 +1,12 @@
+{
+  "AppSyncApiName": "allmanhall",
+  "DynamoDBBillingMode": "PAY_PER_REQUEST",
+  "DynamoDBEnableServerSideEncryption": false,
+  "AuthCognitoUserPoolId": {
+    "Fn::GetAtt": [
+      "authallmanhall1ceb674d",
+      "Outputs.UserPoolId"
+    ]
+  },
+  "AuthModeLastUpdated": "2025-10-17T12:56:40.210Z"
+}

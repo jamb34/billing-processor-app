@@ -1,0 +1,38 @@
+type FileMetadata @model @auth(rules: [
+  { allow: owner },
+  { allow: private, operations: [read] }
+]) {
+  id: ID!
+  fileName: String!
+  fileSize: Int
+  s3Key: String!
+  status: FileStatus!
+  approvalStatus: ApprovalStatus!
+  uploadDate: AWSDateTime!
+  processedDate: AWSDateTime
+  approvedDate: AWSDateTime
+  rejectedDate: AWSDateTime
+  rejectionReason: String
+  outputFiles: [OutputFile]
+  createdBy: String!
+}
+
+type OutputFile {
+  type: String!
+  s3Key: String!
+  fileName: String!
+  generatedDate: AWSDateTime!
+}
+
+enum FileStatus {
+  UPLOADED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}

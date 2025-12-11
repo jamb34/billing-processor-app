@@ -1,0 +1,14 @@
+{
+  "resourceName": "s3a9633739",
+  "policyUUID": "a9633739",
+  "bucketName": "billing-uploads-jackb",
+  "storageAccess": "auth",
+  "guestAccess": [],
+  "authAccess": [
+    "CREATE_AND_UPDATE",
+    "READ",
+    "DELETE"
+  ],
+  "triggerFunction": "NONE",
+  "groupAccess": {}
+}

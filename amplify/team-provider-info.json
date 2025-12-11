@@ -1,0 +1,32 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-allmanhall-dev-23033-authRole",
+      "UnauthRoleArn": "arn:aws:iam::905418299661:role/amplify-allmanhall-dev-23033-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::905418299661:role/amplify-allmanhall-dev-23033-authRole",
+      "Region": "eu-west-2",
+      "DeploymentBucketName": "amplify-allmanhall-dev-23033-deployment",
+      "UnauthRoleName": "amplify-allmanhall-dev-23033-unauthRole",
+      "StackName": "amplify-allmanhall-dev-23033",
+      "StackId": "arn:aws:cloudformation:eu-west-2:905418299661:stack/amplify-allmanhall-dev-23033/66e641d0-a833-11f0-890f-0a052d65b653",
+      "AmplifyAppId": "djqvrfopthnvh"
+    },
+    "categories": {
+      "auth": {
+        "allmanhall1ceb674d": {}
+      },
+      "function": {
+        "billingvalidator": {
+          "deploymentBucketName": "amplify-allmanhall-dev-23033-deployment",
+          "s3Key": "amplify-builds/billingvalidator-764c41434b3455316a49-build.zip"
+        }
+      },
+      "storage": {
+        "s3a9633739": {}
+      },
+      "api": {
+        "allmanhall": {}
+      }
+    }
+  }
+}
