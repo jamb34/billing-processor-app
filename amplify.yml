@@ -1,0 +1,23 @@
+version: 1
+backend:
+  phases:
+    build:
+      commands:
+        - pyenv install 3.9.0 --skip-existing
+        - pyenv global 3.9.0
+        - amplifyPush --simple
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: build
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
