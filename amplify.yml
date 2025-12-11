@@ -5,6 +5,11 @@ backend:
       commands:
         - pyenv install 3.9.0 --skip-existing
         - pyenv global 3.9.0
+        # Fix pip and install pipenv
+        - python -m pip install --upgrade pip
+        - pip install pipenv virtualenv
+        # Install cryptography compatible version
+        - pip install "cryptography<45"
         - amplifyPush --simple
 frontend:
   phases:
