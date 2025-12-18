@@ -24,7 +24,7 @@ const FileUpload = () => {
       console.log('1. Starting S3 upload...');
       
       // CORRECT: Remove 'public/' since Amplify adds it automatically
-      const s3Key = `public/uploads/${Date.now()}-${file.name}`;
+      const s3Key = `uploads/${Date.now()}-${file.name}`;
       
       const uploadResult = await uploadData({
         key: s3Key,
