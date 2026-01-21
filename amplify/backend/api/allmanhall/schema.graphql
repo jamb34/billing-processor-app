@@ -14,6 +14,7 @@ type FileMetadata @model @auth(rules: [
   rejectedDate: AWSDateTime
   rejectionReason: String
   outputFiles: [OutputFile]
+  downloadUrls: [DownloadUrl]
   createdBy: String!
 }
 
@@ -22,6 +23,13 @@ type OutputFile {
   s3Key: String!
   fileName: String!
   generatedDate: AWSDateTime!
+}
+
+type DownloadUrl {
+  fileName: String!
+  url: String!
+  s3Key: String!
+  type: String
 }
 
 enum FileStatus {

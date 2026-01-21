@@ -14,6 +14,74 @@ const FileDashboard = ({ user }) => {
   const [error, setError] = useState(null);
   const [activeFilter, setActiveFilter] = useState('ALL');
 
+  // ============================================
+  // AUTO-DOWNLOAD SUBSCRIPTION (NEW)
+  // ============================================
+  useEffect(() => {
+    console.log('🔔 Setting up auto-download subscription...');
+    
+    /*
+    const subscription = client.graphql({
+      query: `
+        subscription OnUpdateFileMetadata {
+          onUpdateFileMetadata {
+            id
+            fileName
+            status
+            downloadUrls {
+              fileName
+              url
+              s3Key
+              type
+            }
+          }
+        }
+      `
+    }).subscribe({
+      next: ({ data }) => {
+        const updatedFile = data.onUpdateFileMetadata;
+        console.log('📡 File update received:', updatedFile);
+        
+        // Check if file is PROCESSED and has download URLs
+        if (updatedFile.status === 'PROCESSED' && updatedFile.downloadUrls && updatedFile.downloadUrls.length > 0) {
+          console.log(`🚀 Auto-downloading ${updatedFile.downloadUrls.length} files...`);
+          
+          // Trigger auto-download for each file
+          updatedFile.downloadUrls.forEach(fileInfo => {
+            // Create hidden download link
+            const link = document.createElement('a');
+            link.href = fileInfo.url;
+            link.download = fileInfo.fileName;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            console.log(`📥 Auto-download triggered: ${fileInfo.fileName}`);
+          });
+          
+          // Update local state to show files were downloaded
+          setFiles(prevFiles => 
+            prevFiles.map(f => 
+              f.id === updatedFile.id ? { ...f, downloadUrls: updatedFile.downloadUrls } : f
+            )
+          );
+        }
+      },
+      error: (error) => console.error('❌ Subscription error:', error)
+    });
+
+    // Cleanup subscription
+    return () => {
+      console.log('🔕 Cleaning up subscription');
+      subscription.unsubscribe();
+    };
+    */
+  }, []);
+
+  // ============================================
+  // EXISTING FETCH FILES USE EFFECT
+  // ============================================
   useEffect(() => {
     console.log('🔄 FileDashboard mounted');
     fetchFiles();
@@ -25,7 +93,9 @@ const FileDashboard = ({ user }) => {
       setLoading(true);
       setError(null);
       
-      // MINIMAL SAFE QUERY - only fields that definitely exist
+      // ============================================
+      // UPDATED QUERY - ADDED downloadUrls (CHANGED)
+      // ============================================
       const query = `
         query ListFileMetadata {
           listFileMetadata(limit: 100) {
@@ -36,7 +106,13 @@ const FileDashboard = ({ user }) => {
               approvalStatus
               uploadDate
               createdBy
-              # DO NOT INCLUDE: s3Key, fileSize, outputFiles - some are null
+              # NEW FIELD ADDED:
+              downloadUrls {
+                fileName
+                url
+                s3Key
+                type
+              }
             }
           }
         }
@@ -112,7 +188,7 @@ const FileDashboard = ({ user }) => {
     }
   };
 
-  // Categorize files - with safe defaults
+  // Categorise files - with safe defaults
   const awaitingApproval = files.filter(f => 
     f.status === 'PROCESSED' && f.approvalStatus === 'PENDING'
   );
@@ -188,6 +264,9 @@ const FileDashboard = ({ user }) => {
     );
   }
 
+  // ============================================
+  // UPDATED FILECARD COMPONENT (CHANGED)
+  // ============================================
   const FileCard = ({ file }) => {
     // Safe rendering with fallbacks
     const fileName = file.fileName || 'Unnamed File';
@@ -195,6 +274,9 @@ const FileDashboard = ({ user }) => {
     const createdBy = file.createdBy || 'Unknown';
     const status = file.status || 'UNKNOWN';
     const approvalStatus = file.approvalStatus || 'PENDING';
+    
+    // Check if file has downloads
+    const hasDownloads = file.downloadUrls && file.downloadUrls.length > 0;
 
     return (
       <div key={file.id} style={{
@@ -213,6 +295,17 @@ const FileDashboard = ({ user }) => {
                 <strong>Uploaded:</strong> {uploadDate}
                 {createdBy && createdBy !== 'Unknown' && ` by ${createdBy}`}
               </p>
+              {/* NEW: Download status info */}
+              {file.status === 'PROCESSED' && hasDownloads && (
+                <p style={{ margin: '2px 0', color: '#28a745', fontSize: '11px' }}>
+                  ✅ {file.downloadUrls.length} files ready for download
+                </p>
+              )}
+              {file.status === 'PROCESSED' && !hasDownloads && (
+                <p style={{ margin: '2px 0', color: '#ffc107', fontSize: '11px' }}>
+                  ⏳ Processing downloads...
+                </p>
+              )}
               <p style={{ margin: '2px 0', fontFamily: 'monospace', fontSize: '11px' }}>
                 <strong>ID:</strong> {file.id.substring(0, 12)}...
               </p>
@@ -231,6 +324,40 @@ const FileDashboard = ({ user }) => {
             }}>
               {status}
             </span>
+            
+            {/* NEW: Download button for processed files */}
+            {file.status === 'PROCESSED' && hasDownloads && (
+              <span style={{
+                padding: '4px 8px',
+                borderRadius: '12px',
+                color: 'white',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                backgroundColor: '#17a2b8',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+              onClick={() => {
+                // Manual download trigger
+                file.downloadUrls.forEach((fileInfo, index) => {
+                setTimeout(() => {
+                  const link = document.createElement('a');
+                  link.href = fileInfo.url;
+                  link.download = fileInfo.fileName;
+                  link.style.display = 'none';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  console.log(`Downloaded: ${fileInfo.fileName}`);
+                }, index * 300); // 300ms delay between each download
+                });
+              }}
+              title={`Click to download ${file.downloadUrls.length} files`}
+              >
+                📥 Download ({file.downloadUrls.length})
+              </span>
+            )}
+            
             <span style={{
               padding: '4px 8px',
               borderRadius: '12px',
@@ -387,7 +514,7 @@ const FileDashboard = ({ user }) => {
   );
 };
 
-// Stat Card Component
+// Stat Card Component (unchanged)
 const StatCard = ({ title, count, color, active, onClick }) => (
   <div 
     onClick={onClick}

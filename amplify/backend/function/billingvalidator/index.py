@@ -1,7 +1,7 @@
 import json
 import boto3
-import boto3.dynamodb.conditions  # ADDED
-from botocore.exceptions import ClientError  # ADDED
+import boto3.dynamodb.conditions  
+from botocore.exceptions import ClientError  
 import pandas as pd
 import numpy as np
 from io import StringIO, BytesIO
@@ -15,6 +15,37 @@ dynamodb = boto3.resource('dynamodb')
 
 CONFIG_BUCKET = "billing-config-amh"
 OUTPUT_BUCKET = "billing-output-amh"
+
+def generate_presigned_urls(output_files, expires_in=86400):
+    """Generate presigned URLs for all output files"""
+    presigned_urls = []
+    
+    for file_info in output_files:
+        try:
+            # Generate presigned URL for each file
+            url = s3.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': OUTPUT_BUCKET,
+                    'Key': file_info['s3Key'],
+                    'ResponseContentDisposition': f'attachment; filename="{file_info["fileName"]}"'
+                },
+                ExpiresIn=expires_in  # 24 hours
+            )
+            
+            presigned_urls.append({
+                'fileName': file_info['fileName'],
+                'url': url,
+                's3Key': file_info['s3Key'],
+                'type': file_info['type'],
+            })
+            
+            print(f"✅ Generated presigned URL for {file_info['fileName']}")
+            
+        except Exception as e:
+            print(f"❌ Failed to generate presigned URL for {file_info['fileName']}: {str(e)}")
+    
+    return presigned_urls
 
 def eom_date(date_obj):
     if pd.isna(date_obj):
@@ -149,6 +180,35 @@ def find_file_id_by_s3_key(s3_key):
             file_id = response['Items'][0]['id']
             print(f"✅ Found file by exact s3Key match: {file_id}")
             return file_id
+        
+        # Try both with and without 'public/' prefix
+        # If path doesn't have 'public/', try adding it
+        if not s3_key.startswith('public/'):
+            s3_key_with_public = 'public/' + s3_key
+            print(f"🔍 Also trying WITH 'public/' prefix: {s3_key_with_public}")
+            
+            response = table.scan(
+                FilterExpression=boto3.dynamodb.conditions.Attr('s3Key').eq(s3_key_with_public)
+            )
+            
+            if response['Items'] and len(response['Items']) > 0:
+                file_id = response['Items'][0]['id']
+                print(f"✅ Found file WITH 'public/' prefix: {file_id}")
+                return file_id
+        
+        # If path has 'public/', try without it
+        elif s3_key.startswith('public/'):
+            s3_key_without_public = s3_key[7:]  # Remove 'public/'
+            print(f"🔍 Also trying WITHOUT 'public/' prefix: {s3_key_without_public}")
+            
+            response = table.scan(
+                FilterExpression=boto3.dynamodb.conditions.Attr('s3Key').eq(s3_key_without_public)
+            )
+            
+            if response['Items'] and len(response['Items']) > 0:
+                file_id = response['Items'][0]['id']
+                print(f"✅ Found file WITHOUT 'public/' prefix: {file_id}")
+                return file_id
         
         print("❌ No exact s3Key match found, trying filename match...")
         filename = s3_key.split('/')[-1]
@@ -524,14 +584,21 @@ def lambda_handler(event, context):
         print("✅ Billing processing completed successfully!")
         
         if can_update_dynamodb:
-            print("💾 Updating DynamoDB with output files...")
+            print("🔗 Generating presigned download URLs...")
+            # Generate presigned URLs for all output files
+            download_urls = generate_presigned_urls(output_files)
+            
+            print("💾 Updating DynamoDB with output files and download URLs...")
             update_result = update_file_metadata(file_id, {
                 'status': 'PROCESSED',
-                'outputFiles': output_files,
+                'outputFiles': output_files,  # Keep original for reference
+                'downloadUrls': download_urls,  # NEW: Add presigned URLs
                 'processedDate': datetime.now().isoformat()
             })
+            
             if update_result:
-                print("🎉 SUCCESS: DynamoDB updated with output files!")
+                print("🎉 SUCCESS: DynamoDB updated with output files and download URLs!")
+                print(f"📥 {len(download_urls)} files ready for auto-download")
             else:
                 print("❌ WARNING: Failed to update DynamoDB with output files")
         else:
@@ -546,7 +613,8 @@ def lambda_handler(event, context):
             'processedRecords': len(data_df),
             'summaryCount': len(summaries),
             'timestamp': timestamp,
-            'dynamodbUpdated': can_update_dynamodb
+            'dynamodbUpdated': can_update_dynamodb,
+            'downloadUrlsGenerated': can_update_dynamodb
         }
 
     except Exception as e:

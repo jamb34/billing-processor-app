@@ -4,11 +4,21 @@ import { Amplify } from 'aws-amplify';
 import awsconfig from './aws-exports';
 import FileUpload from './components/FileUpload';
 import FileDashboard from './components/FileDashboard';
+import CustomFileBrowser from './components/CustomFileBrowser';  // Change this
 import '@aws-amplify/ui-react/styles.css';
 import './App.css';
 
-// Configure Amplify with AWS services
-Amplify.configure(awsconfig);
+Amplify.configure({
+  ...awsconfig,
+  
+  Storage: {
+    S3: {
+      bucket: 'billing-output-amh',
+      region: 'eu-west-2',
+      identityPoolId: awsconfig.aws_cognito_identity_pool_id  // Use Cognito
+    }
+  }
+});
 
 function App({ signOut, user }) {
   const [activeTab, setActiveTab] = useState('upload');
@@ -46,12 +56,24 @@ function App({ signOut, user }) {
           >
             📊 Processing Dashboard
           </button>
+          {/* NEW BROWSE TAB BUTTON - ADDED HERE */}
+          <button 
+            onClick={() => setActiveTab('browse')}
+            style={{
+              ...styles.navButton,
+              ...(activeTab === 'browse' ? styles.activeNavButton : {})
+            }}
+          >
+            🔍 Browse Files
+          </button>
         </nav>
       </header>
       
       <main style={styles.main}>
         {activeTab === 'upload' && <FileUpload />}
         {activeTab === 'dashboard' && <FileDashboard user={user} />}
+        {/* NEW COMPONENT RENDER - ADDED HERE */}
+        {activeTab === 'browse' && <CustomFileBrowser />}
       </main>
     </div>
   );
