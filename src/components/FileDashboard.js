@@ -15,68 +15,14 @@ const FileDashboard = ({ user }) => {
   const [activeFilter, setActiveFilter] = useState('ALL');
 
   // ============================================
-  // AUTO-DOWNLOAD SUBSCRIPTION (NEW)
+  // AUTO-DOWNLOAD SUBSCRIPTION (TEMPORARILY DISABLED)
   // ============================================
   useEffect(() => {
     console.log('🔔 Setting up auto-download subscription...');
     
-    /*
-    const subscription = client.graphql({
-      query: `
-        subscription OnUpdateFileMetadata {
-          onUpdateFileMetadata {
-            id
-            fileName
-            status
-            downloadUrls {
-              fileName
-              url
-              s3Key
-              type
-            }
-          }
-        }
-      `
-    }).subscribe({
-      next: ({ data }) => {
-        const updatedFile = data.onUpdateFileMetadata;
-        console.log('📡 File update received:', updatedFile);
-        
-        // Check if file is PROCESSED and has download URLs
-        if (updatedFile.status === 'PROCESSED' && updatedFile.downloadUrls && updatedFile.downloadUrls.length > 0) {
-          console.log(`🚀 Auto-downloading ${updatedFile.downloadUrls.length} files...`);
-          
-          // Trigger auto-download for each file
-          updatedFile.downloadUrls.forEach(fileInfo => {
-            // Create hidden download link
-            const link = document.createElement('a');
-            link.href = fileInfo.url;
-            link.download = fileInfo.fileName;
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            console.log(`📥 Auto-download triggered: ${fileInfo.fileName}`);
-          });
-          
-          // Update local state to show files were downloaded
-          setFiles(prevFiles => 
-            prevFiles.map(f => 
-              f.id === updatedFile.id ? { ...f, downloadUrls: updatedFile.downloadUrls } : f
-            )
-          );
-        }
-      },
-      error: (error) => console.error('❌ Subscription error:', error)
-    });
-
-    // Cleanup subscription
     return () => {
       console.log('🔕 Cleaning up subscription');
-      subscription.unsubscribe();
     };
-    */
   }, []);
 
   // ============================================
@@ -87,15 +33,82 @@ const FileDashboard = ({ user }) => {
     fetchFiles();
   }, []);
 
+  // ============================================
+  // APPROVAL/DENIAL FUNCTIONS (NEW)
+  // ============================================
+  const handleApprove = async (fileId) => {
+    try {
+      console.log(`Approving file: ${fileId}`);
+      
+      const updateMutation = `
+        mutation UpdateFileMetadata($input: UpdateFileMetadataInput!) {
+          updateFileMetadata(input: $input) {
+            id
+            approvalStatus
+            approvedDate
+          }
+        }
+      `;
+      
+      const result = await client.graphql({
+        query: updateMutation,
+        variables: {
+          input: {
+            id: fileId,
+            approvalStatus: 'APPROVED',
+            approvedDate: new Date().toISOString()
+          }
+        }
+      });
+      
+      console.log('✅ File approved:', result);
+      fetchFiles(); // Refresh the list
+      
+    } catch (error) {
+      console.error('❌ Error approving file:', error);
+    }
+  };
+
+  const handleDeny = async (fileId) => {
+    try {
+      console.log(`Denying file: ${fileId}`);
+      
+      const updateMutation = `
+        mutation UpdateFileMetadata($input: UpdateFileMetadataInput!) {
+          updateFileMetadata(input: $input) {
+            id
+            approvalStatus
+            rejectedDate
+          }
+        }
+      `;
+      
+      const result = await client.graphql({
+        query: updateMutation,
+        variables: {
+          input: {
+            id: fileId,
+            approvalStatus: 'REJECTED',
+            rejectedDate: new Date().toISOString()
+          }
+        }
+      });
+      
+      console.log('✅ File denied:', result);
+      fetchFiles(); // Refresh the list
+      
+    } catch (error) {
+      console.error('❌ Error denying file:', error);
+    }
+  };
+
   const fetchFiles = async () => {
     try {
       console.log('🔍 Starting to fetch files...');
       setLoading(true);
       setError(null);
       
-      // ============================================
-      // UPDATED QUERY - ADDED downloadUrls (CHANGED)
-      // ============================================
+      // UPDATED QUERY - ADDED downloadUrls
       const query = `
         query ListFileMetadata {
           listFileMetadata(limit: 100) {
@@ -265,9 +278,9 @@ const FileDashboard = ({ user }) => {
   }
 
   // ============================================
-  // UPDATED FILECARD COMPONENT (CHANGED)
+  // UPDATED FILECARD COMPONENT WITH APPROVAL BUTTONS
   // ============================================
-  const FileCard = ({ file }) => {
+  const FileCard = ({ file, onApprove, onDeny }) => {
     // Safe rendering with fallbacks
     const fileName = file.fileName || 'Unnamed File';
     const uploadDate = file.uploadDate ? new Date(file.uploadDate).toLocaleString() : 'Unknown';
@@ -338,24 +351,60 @@ const FileDashboard = ({ user }) => {
                 whiteSpace: 'nowrap'
               }}
               onClick={() => {
-                // Manual download trigger
+                // Manual download trigger with delay
                 file.downloadUrls.forEach((fileInfo, index) => {
-                setTimeout(() => {
-                  const link = document.createElement('a');
-                  link.href = fileInfo.url;
-                  link.download = fileInfo.fileName;
-                  link.style.display = 'none';
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  console.log(`Downloaded: ${fileInfo.fileName}`);
-                }, index * 300); // 300ms delay between each download
+                  setTimeout(() => {
+                    const link = document.createElement('a');
+                    link.href = fileInfo.url;
+                    link.download = fileInfo.fileName;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    console.log(`Downloaded: ${fileInfo.fileName}`);
+                  }, index * 300); // 300ms delay between each download
                 });
               }}
               title={`Click to download ${file.downloadUrls.length} files`}
               >
                 📥 Download ({file.downloadUrls.length})
               </span>
+            )}
+            
+            {/* NEW: APPROVAL BUTTONS */}
+            {file.status === 'PROCESSED' && file.approvalStatus === 'PENDING' && (
+              <div style={{ display: 'flex', gap: '8px', marginTop: '5px' }}>
+                <button
+                  onClick={() => onApprove && onApprove(file.id)}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ✅ Approve
+                </button>
+                <button
+                  onClick={() => onDeny && onDeny(file.id)}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ❌ Deny
+                </button>
+              </div>
             )}
             
             <span style={{
@@ -505,7 +554,12 @@ const FileDashboard = ({ user }) => {
         ) : (
           <div style={{ display: 'grid', gap: '15px' }}>
             {getFilteredFiles().map(file => (
-              <FileCard key={file.id} file={file} />
+              <FileCard 
+                key={file.id} 
+                file={file} 
+                onApprove={handleApprove}
+                onDeny={handleDeny}
+              />
             ))}
           </div>
         )}

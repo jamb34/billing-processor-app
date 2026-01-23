@@ -131,11 +131,12 @@ const FileUpload = () => {
       )}
       
       <div style={styles.instructions}>
-        <h3>Upload Status:</h3>
-        <p>✅ <strong>S3 File Storage</strong> - Working</p>
-        <p>✅ <strong>Database Connection</strong> - Strong</p>
-        <p>🔄 <strong>Auto-Processing</strong> - Ready when s3Key is added</p>
-        <p>🔧 <strong>Recent Fix</strong> - S3 path now matches Lambda trigger</p>
+        <h3>Billing Processor:</h3>
+        <p>✅ <strong>Upload a file</strong> - Files will be automatically processed when dropped into the pipeline</p>
+        <p>✅ <strong>Go to processing dashboard</strong> </p>
+        <p>🔍 <strong>File collection</strong> - Download the files by clicking download next to the tile of your uploaded file</p>
+        <p>🔍 <strong>File inspection</strong> - View details of your processed files</p>
+        <p>📤 <strong>Place processed files</strong> - Place files in the Box upload</p>
       </div>
     </div>
   );

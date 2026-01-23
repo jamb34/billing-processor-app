@@ -56,7 +56,7 @@ function App({ signOut, user }) {
           >
             📊 Processing Dashboard
           </button>
-          {/* NEW BROWSE TAB BUTTON - ADDED HERE */}
+          {}
           <button 
             onClick={() => setActiveTab('browse')}
             style={{
@@ -64,7 +64,7 @@ function App({ signOut, user }) {
               ...(activeTab === 'browse' ? styles.activeNavButton : {})
             }}
           >
-            🔍 Browse Files
+            📤 Upload Files
           </button>
         </nav>
       </header>
