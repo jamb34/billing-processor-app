@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "paths": {
+    "/upload-to-box": {
+      "name": "/upload-to-box",
+      "lambdaFunction": "allmanhalla5460e60",
+      "permissions": {
+        "setting": "private",
+        "auth": [
+          "create"
+        ]
+      }
+    }
+  }
+}

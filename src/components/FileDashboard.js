@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/api';
+import { post } from 'aws-amplify/api';
 import { Amplify } from 'aws-amplify';
 import config from '../amplifyconfiguration.json';
 
@@ -101,6 +102,39 @@ const FileDashboard = ({ user }) => {
       console.error('❌ Error denying file:', error);
     }
   };
+
+  const handleSendToBox = async (fileId) => {
+  try {
+    console.log(`📤 Sending file to Box: ${fileId}`);
+    
+    const restOperation = post({
+      apiName: 'BoxUploadAPI',
+      path: '/upload-to-box',
+      options: {
+        body: {
+          file_id: fileId
+        }
+      }
+    });
+
+    const { body } = await restOperation.response;
+    const response = await body.json();
+    
+    console.log('✅ Box upload response:', response);
+    alert(`Successfully uploaded ${response.successCount} files to Box!`);
+    fetchFiles();
+    
+  } catch (error) {
+    console.error('❌ Error sending to Box:', error);
+    
+    // Check if it's a timeout - the upload might still succeed
+    if (error.message?.includes('504') || error.response?.statusCode === 504) {
+      alert('Upload is taking longer than expected. Check Box in a few minutes to verify the files uploaded successfully.');
+    } else {
+      alert('Failed to upload to Box. Check console for details.');
+    }
+  }
+};
 
   const fetchFiles = async () => {
     try {
@@ -278,9 +312,9 @@ const FileDashboard = ({ user }) => {
   }
 
   // ============================================
-  // UPDATED FILECARD COMPONENT WITH APPROVAL BUTTONS
+  // UPDATED FILECARD COMPONENT WITH APPROVAL BUTTONS AND BOX UPLOAD
   // ============================================
-  const FileCard = ({ file, onApprove, onDeny }) => {
+  const FileCard = ({ file, onApprove, onDeny, onSendToBox }) => {
     // Safe rendering with fallbacks
     const fileName = file.fileName || 'Unnamed File';
     const uploadDate = file.uploadDate ? new Date(file.uploadDate).toLocaleString() : 'Unknown';
@@ -405,6 +439,26 @@ const FileDashboard = ({ user }) => {
                   ❌ Deny
                 </button>
               </div>
+            )}
+            
+            {/* Send to Box button - only show for APPROVED files */}
+            {file.approvalStatus === 'APPROVED' && (
+              <button
+                onClick={() => onSendToBox && onSendToBox(file.id)}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#0061D5',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  marginTop: '5px'
+                }}
+              >
+                📤 Send to Box
+              </button>
             )}
             
             <span style={{
@@ -559,6 +613,7 @@ const FileDashboard = ({ user }) => {
                 file={file} 
                 onApprove={handleApprove}
                 onDeny={handleDeny}
+                onSendToBox={handleSendToBox}
               />
             ))}
           </div>

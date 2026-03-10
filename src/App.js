@@ -56,7 +56,7 @@ function App({ signOut, user }) {
           >
             📊 Processing Dashboard
           </button>
-          {}
+          {/*
           <button 
             onClick={() => setActiveTab('browse')}
             style={{
@@ -66,6 +66,7 @@ function App({ signOut, user }) {
           >
             📤 Upload Files
           </button>
+          */}
         </nav>
       </header>
       

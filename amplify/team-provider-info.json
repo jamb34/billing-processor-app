@@ -9,7 +9,8 @@
       "UnauthRoleName": "amplify-allmanhall-dev-23033-unauthRole",
       "StackName": "amplify-allmanhall-dev-23033",
       "StackId": "arn:aws:cloudformation:eu-west-2:905418299661:stack/amplify-allmanhall-dev-23033/66e641d0-a833-11f0-890f-0a052d65b653",
-      "AmplifyAppId": "djqvrfopthnvh"
+      "AmplifyAppId": "djqvrfopthnvh",
+      "APIGatewayAuthURL": "https://s3.amazonaws.com/amplify-allmanhall-dev-23033-deployment/amplify-cfn-templates/api/APIGatewayAuthStack.json"
     },
     "categories": {
       "auth": {
@@ -18,14 +19,23 @@
       "function": {
         "billingvalidator": {
           "deploymentBucketName": "amplify-allmanhall-dev-23033-deployment",
-          "s3Key": "amplify-builds/billingvalidator-764c41434b3455316a49-build.zip"
+          "s3Key": "amplify-builds/billingvalidator-6c513045744b704a614c-build.zip"
+        },
+        "allmanhall2b82687c": {
+          "deploymentBucketName": "amplify-allmanhall-dev-23033-deployment",
+          "s3Key": "amplify-builds/allmanhall2b82687c-546f5563554f742f6443-build.zip"
+        },
+        "allmanhalla5460e60": {
+          "deploymentBucketName": "amplify-allmanhall-dev-23033-deployment",
+          "s3Key": "amplify-builds/allmanhalla5460e60-786d456c4273354d7870-build.zip"
         }
       },
       "storage": {
         "s3a9633739": {}
       },
       "api": {
-        "allmanhall": {}
+        "allmanhall": {},
+        "BoxUploadAPI": {}
       }
     }
   }

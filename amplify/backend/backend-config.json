@@ -1,5 +1,19 @@
 {
   "api": {
+    "BoxUploadAPI": {
+      "dependsOn": [
+        {
+          "attributes": [
+            "Name",
+            "Arn"
+          ],
+          "category": "function",
+          "resourceName": "allmanhalla5460e60"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "API Gateway"
+    },
     "allmanhall": {
       "dependsOn": [
         {
@@ -64,6 +78,16 @@
     }
   },
   "function": {
+    "allmanhall2b82687c": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "allmanhalla5460e60": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "billingvalidator": {
       "build": true,
       "providerPlugin": "awscloudformation",
@@ -71,6 +95,38 @@
     }
   },
   "parameters": {
+    "AMPLIFY_function_allmanhall2b82687c_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "allmanhall2b82687c"
+        }
+      ]
+    },
+    "AMPLIFY_function_allmanhall2b82687c_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "allmanhall2b82687c"
+        }
+      ]
+    },
+    "AMPLIFY_function_allmanhalla5460e60_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "allmanhalla5460e60"
+        }
+      ]
+    },
+    "AMPLIFY_function_allmanhalla5460e60_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "allmanhalla5460e60"
+        }
+      ]
+    },
     "AMPLIFY_function_billingvalidator_deploymentBucketName": {
       "usedBy": [
         {

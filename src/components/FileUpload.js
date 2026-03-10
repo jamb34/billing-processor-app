@@ -132,11 +132,12 @@ const FileUpload = () => {
       
       <div style={styles.instructions}>
         <h3>Billing Processor:</h3>
-        <p>✅ <strong>Upload a file</strong> - Files will be automatically processed when dropped into the pipeline</p>
-        <p>✅ <strong>Go to processing dashboard</strong> </p>
+        <p>✅ <strong>Upload a Sage extract</strong> - The file will be automatically processed when dropped into the tool</p>
+        <p>✅ <strong>Go to the 📊 Processing Dashboard</strong> </p>
         <p>🔍 <strong>File collection</strong> - Download the files by clicking download next to the tile of your uploaded file</p>
         <p>🔍 <strong>File inspection</strong> - View details of your processed files</p>
-        <p>📤 <strong>Place processed files</strong> - Place files in the Box upload</p>
+        <p>❓ <strong>Approve or reject</strong> - Approve or reject processed files in the dashboard tile</p>
+        <p>🏁 <strong>If approved, upload to box button</strong> - A button to upload approved files to Box will appear in the dashboard</p>
       </div>
     </div>
   );
