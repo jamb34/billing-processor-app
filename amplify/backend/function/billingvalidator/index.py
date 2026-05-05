@@ -22,7 +22,6 @@ def generate_presigned_urls(output_files, expires_in=86400):
     
     for file_info in output_files:
         try:
-            # Generate presigned URL for each file
             url = s3.generate_presigned_url(
                 'get_object',
                 Params={
@@ -30,7 +29,7 @@ def generate_presigned_urls(output_files, expires_in=86400):
                     'Key': file_info['s3Key'],
                     'ResponseContentDisposition': f'attachment; filename="{file_info["fileName"]}"'
                 },
-                ExpiresIn=expires_in  # 24 hours
+                ExpiresIn=expires_in
             )
             
             presigned_urls.append({
@@ -59,7 +58,8 @@ def calculate_tax_split(gross_amount, tax_amount):
     if abs(net_0) < 0.20:
         net_20 += net_0
         net_0 = 0
-    return net_0, net_20, tax_amount
+    # Round to 2 decimal places to avoid floating point errors
+    return round(net_0, 2), round(net_20, 2), round(tax_amount, 2)
 
 def get_gl_code(dimension_type):
     gl_codes = {
@@ -106,6 +106,66 @@ def upload_to_s3(df, bucket, key, file_type='excel'):
         csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False)
         s3.put_object(Bucket=bucket, Key=key, Body=csv_buffer.getvalue())
+
+def upload_summary_to_s3(df, bucket, key):
+    """Upload summary with formatting: Grand Total at top, headers below, subtotals in bold"""
+    from openpyxl.styles import PatternFill, Font
+    from openpyxl import Workbook
+
+    buffer = BytesIO()
+    
+    # Create workbook manually for custom formatting
+    wb = Workbook()
+    ws = wb.active
+    
+    # Assuming df already has GRAND TOTAL as first row
+    # Split the dataframe
+    grand_total_row = df.iloc[0]  # First row is GRAND TOTAL
+    data_rows = df.iloc[1:]  # Rest of the data
+    
+    # Define which columns are financial (need £ formatting)
+    financial_columns = ["Net (£)", "VAT (£)", "Gross (£)", "Mark Up", "Invoice Total"]
+    
+    # Row 1: Grand Total (no header, just values)
+    for col_idx, (col_name, value) in enumerate(grand_total_row.items(), start=1):
+        cell = ws.cell(row=1, column=col_idx, value=value)
+        cell.font = Font(bold=True, size=12)
+        
+        # Apply currency formatting to financial columns
+        if col_name in financial_columns and isinstance(value, (int, float)):
+            cell.number_format = '£#,##0.00'
+    
+    # Row 2: Column Headers
+    header_fill = PatternFill(start_color="0C6FA9", end_color="0C6FA9", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+    
+    for col_idx, col_name in enumerate(df.columns, start=1):
+        cell = ws.cell(row=2, column=col_idx, value=col_name)
+        cell.fill = header_fill
+        cell.font = header_font
+    
+    # Grey fill for subtotals
+    subtotal_fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
+    
+    # Row 3 onwards: Data rows
+    for row_idx, (_, row) in enumerate(data_rows.iterrows(), start=3):
+        is_subtotal = "Subtotal" in str(row["Supplier"])
+        
+        for col_idx, (col_name, value) in enumerate(row.items(), start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            
+            # Make subtotal rows bold and grey
+            if is_subtotal:
+                cell.font = Font(bold=True)
+                cell.fill = subtotal_fill
+            
+            # Apply currency formatting to financial columns for all data rows
+            if col_name in financial_columns and isinstance(value, (int, float)):
+                cell.number_format = '£#,##0.00'
+    
+    wb.save(buffer)
+    buffer.seek(0)
+    s3.put_object(Bucket=bucket, Key=key, Body=buffer.getvalue())
 
 def update_file_metadata(file_id, updates):
     try:
@@ -181,8 +241,6 @@ def find_file_id_by_s3_key(s3_key):
             print(f"✅ Found file by exact s3Key match: {file_id}")
             return file_id
         
-        # Try both with and without 'public/' prefix
-        # If path doesn't have 'public/', try adding it
         if not s3_key.startswith('public/'):
             s3_key_with_public = 'public/' + s3_key
             print(f"🔍 Also trying WITH 'public/' prefix: {s3_key_with_public}")
@@ -196,9 +254,8 @@ def find_file_id_by_s3_key(s3_key):
                 print(f"✅ Found file WITH 'public/' prefix: {file_id}")
                 return file_id
         
-        # If path has 'public/', try without it
         elif s3_key.startswith('public/'):
-            s3_key_without_public = s3_key[7:]  # Remove 'public/'
+            s3_key_without_public = s3_key[7:]
             print(f"🔍 Also trying WITHOUT 'public/' prefix: {s3_key_without_public}")
             
             response = table.scan(
@@ -258,7 +315,10 @@ def create_data_sheet(report_df, units_df, dimensions_df):
         "Total Amount": report_df.iloc[:, 10],
         "Period Code": report_df.iloc[:, 11]
     })
-    data_df = data_df.fillna("Unknown")
+    # Fill NaN values in all columns except Date (preserve datetime)
+    data_df = data_df.fillna({
+        col: "Unknown" for col in data_df.columns if col != "Date"
+    })
     data_df = add_dimension_columns(data_df, units_df, dimensions_df)
     data_df.sort_values(by=["Supplier ID", "Class ID"], ascending=False, inplace=True)
     return data_df
@@ -314,29 +374,56 @@ def generate_summary_sheets(data_df, units_df, mark_up_adjustments_df):
                 summary_data.append({
                     "Supplier": row["Supplier Name"],
                     "Invoice Number": row["AP Purchase Invoice Number"],
-                    "Date": row["Date"],
+                    "Date": row["Date"].strftime("%d/%m/%Y") if pd.notna(row["Date"]) else "",
                     "Center": row["Invoice Grouping Name"],
                     "Net (£)": net,
                     "VAT (£)": tax,
-                    "Gross (£)": gross,
-                    "Mark Up": markup_gross,
-                    "Invoice Total": total_gross
+                    "Gross (£)": round(gross, 2),
+                    "Mark Up": round(markup_gross, 2),
+                    "Invoice Total": round(total_gross, 2)
                 })
                 supplier_total_net += net
                 supplier_total_tax += tax
                 supplier_total_gross += total_gross
             summary_data.append({
                 "Supplier": f"{row['Supplier Name']} Subtotal",
+                "Invoice Number": "",
+                "Date": "",
+                "Center": "",
                 "Net (£)": supplier_total_net,
                 "VAT (£)": supplier_total_tax,
-                "Gross (£)": supplier_total_gross
+                "Gross (£)": round(supplier_total_net + supplier_total_tax, 2),
+                "Mark Up": "",
+                "Invoice Total": round(supplier_total_gross, 2)
             })
         summary_df = pd.DataFrame(summary_data)
-        grand_total_net = summary_df["Net (£)"].sum()
-        grand_total_tax = summary_df["VAT (£)"].sum()
-        grand_total_gross = summary_df["Gross (£)"].sum()
-        grand_total_df = pd.DataFrame([{"Supplier": "GRAND TOTAL", "Net (£)": grand_total_net, "VAT (£)": grand_total_tax, "Gross (£)": grand_total_gross}])
+        
+        # Calculate grand totals from actual transaction rows only (exclude Subtotal rows)
+        transaction_rows = summary_df[~summary_df["Supplier"].str.contains("Subtotal", na=False)]
+        grand_total_net = transaction_rows["Net (£)"].sum()
+        grand_total_tax = transaction_rows["VAT (£)"].sum()
+        grand_total_gross = transaction_rows["Gross (£)"].sum()
+        
+        # Invoice Total comes from subtotals only
+        grand_total_invoice = summary_df[summary_df["Supplier"].str.contains("Subtotal", na=False)]["Invoice Total"].sum()
+        
+        grand_total_df = pd.DataFrame([{
+            "Supplier": "GRAND TOTAL",
+            "Invoice Number": "",
+            "Date": "",
+            "Center": "",
+            "Net (£)": round(grand_total_net, 2),
+            "VAT (£)": round(grand_total_tax, 2),
+            "Gross (£)": round(grand_total_gross, 2),
+            "Mark Up": "",
+            "Invoice Total": round(grand_total_invoice, 2)
+        }])
         summary_df = pd.concat([grand_total_df, summary_df], ignore_index=True)
+        
+        # Reorder columns to match requested order
+        column_order = ["Supplier", "Invoice Number", "Date", "Center", "Net (£)", "VAT (£)", "Gross (£)", "Mark Up", "Invoice Total"]
+        summary_df = summary_df[column_order]
+        
         summaries[class_id] = summary_df
     return summaries
 
@@ -347,8 +434,38 @@ def get_markup_rate(row, mark_up_adjustments_df):
         return adjustment_row.iloc[0, 1]
     return row["Mark Up"] if pd.notna(row["Mark Up"]) else 0
 
+def get_payment_terms(unit_code, billing_matrix_df):
+    """Look up payment terms (days) from column O of the billing matrix using Unit Code in column A"""
+    parts = unit_code.split('/')
+    if len(parts) >= 3:
+        d2_lookup = f"{parts[0]}/{parts[1]}"
+    elif len(parts) == 2:
+        d2_lookup = parts[0]
+    else:
+        d2_lookup = unit_code
+
+    billing_row = billing_matrix_df[billing_matrix_df.iloc[:, 0] == d2_lookup]
+
+    if not billing_row.empty:
+        payment_terms_value = billing_row.iloc[0, 14]  # Column O = index 14
+        if pd.notna(payment_terms_value) and payment_terms_value != '':
+            try:
+                days = int(payment_terms_value)
+                print(f"📅 Payment terms for {d2_lookup}: {days} days")
+                return days
+            except (ValueError, TypeError):
+                print(f"⚠️ Invalid payment terms value '{payment_terms_value}' for {d2_lookup}, using default 30 days")
+    else:
+        print(f"⚠️ Unit code {d2_lookup} not found in billing matrix, using default 30 days")
+
+    return 30
+
 def create_invoice_template(data_df, units_df, mark_up_adjustments_df):
     invoice_lines = []
+
+    # Load billing matrix once for payment terms lookup
+    billing_matrix_df = load_from_s3(CONFIG_BUCKET, "Client Billing Matrix - Sage Version.xlsx", "Units")
+
     for grouping_id, group in data_df.groupby("Invoice Grouping Code"):
         base_total_gross = group["Total Amount"].sum()
         base_total_tax = group["Transaction Tax"].sum()
@@ -359,71 +476,126 @@ def create_invoice_template(data_df, units_df, mark_up_adjustments_df):
         total_gross = base_total_gross + total_markup
         total_tax = base_total_tax
         doc_type = "Invoice" if total_gross >= 0 else "Credit"
-        posting_date = eom_date(group["Date"].min())
+        
+        # Handle missing dates gracefully
+        min_date = group["Date"].min()
+        if pd.isna(min_date):
+            posting_date = eom_date(datetime.now())
+            print(f"⚠️ Warning: No valid dates for group {grouping_id}, using current date")
+        else:
+            posting_date = eom_date(min_date)
+        
         created_date = posting_date
-        due_date = calculate_due_date(posting_date, "EOM")
+
+        # Look up payment terms from billing matrix using Unit Code in column A
+        unit_code_for_lookup = group["Unit Code"].iloc[0] if "Unit Code" in group.columns else None
+        payment_terms_days = get_payment_terms(unit_code_for_lookup, billing_matrix_df) if unit_code_for_lookup else 30
+        due_date = posting_date + timedelta(days=payment_terms_days) if posting_date else None
+
         dimension_type = determine_dimension_type(group["Unit Code"].iloc[0], units_df)
         gl_code = get_gl_code(dimension_type)
         net_0, net_20, tax_20 = calculate_tax_split(total_gross, total_tax)
+        
+        # Get grouping name and period for MEMO field
+        grouping_name = group["Invoice Grouping Name"].iloc[0] if "Invoice Grouping Name" in group.columns else grouping_id
+        
+        # Get period info for description
+        period_code = group["Period Code"].iloc[0] if "Period Code" in group.columns else None
+        if period_code:
+            period_months = {
+                "001": "Aug", "002": "Sep", "003": "Oct", "004": "Nov",
+                "005": "Dec", "006": "Jan", "007": "Feb", "008": "Mar",
+                "009": "Apr", "010": "May", "011": "Jun", "012": "Jul"
+            }
+            try:
+                parts = str(period_code).split('/')
+                year_part = parts[0] if len(parts) > 0 else str(posting_date.year)
+                period_part = parts[1] if len(parts) > 1 else "001"
+                month_abbr = period_months.get(period_part, "")
+                period_display = f"{month_abbr} {year_part}"
+            except:
+                period_display = posting_date.strftime("%b %Y")
+        else:
+            period_display = posting_date.strftime("%b %Y")
+        
+        memo_text = f"{grouping_name} Purchases for {period_display}"
+        
+        # Format dates as DD/MM/YYYY strings
+        posting_date_str = posting_date.strftime("%d/%m/%Y") if posting_date else ""
+        created_date_str = created_date.strftime("%d/%m/%Y") if created_date else ""
+        due_date_str = due_date.strftime("%d/%m/%Y") if due_date else ""
+        
+        # Store customer_id for reuse
+        customer_id = group["Customer ID"].iloc[0]
+        
         if net_0 != 0:
             invoice_lines.append({
                 "DONOTIMPORT": grouping_id,
-                "INVOICE_NO": f"INV-{grouping_id}",
-                "CUSTOMER_ID": group["Customer ID"].iloc[0],
-                "posting_date": posting_date,
-                "CREATED_DATE": created_date,
-                "due_date": due_date,
-                "TOTAL_DUE": total_gross,
-                "Description": f"{doc_type} for {grouping_id} (Markup: £{total_markup:.2f})",
+                "INVOICE_NO": "",
+                "PO_NO": "",
+                "CUSTOMER_ID": customer_id,
+                "posting_date": posting_date_str,
+                "CREATED_DATE": created_date_str,
+                "due_date": due_date_str,
+                "TOTAL_DUE": round(total_gross, 2),
+                "Description": memo_text,
                 "LINE_NO": 1,
-                "MEMO": "Net at 0% Tax",
+                "MEMO": memo_text,
                 "ACCT_NO": gl_code,
                 "LOCATION_ID": "AMH",
                 "AMOUNT": net_0,
                 "SUPDOCID": "",
                 "TAX_LINE_NO": 1,
                 "TAX_AMOUNT": 0,
-                "TAX_DETAILID": "UK Sale Goods Zero Rate"
+                "TAX_DETAILID": "UK Sale Goods Zero Rate",
+                "ARINVOICEITEM_CLASSID": grouping_id,
+                "ARINVOICEITEM_CUSTOMERID": customer_id
             })
         elif net_20 != 0:
             invoice_lines.append({
                 "DONOTIMPORT": grouping_id,
-                "INVOICE_NO": f"INV-{grouping_id}",
-                "CUSTOMER_ID": group["Customer ID"].iloc[0],
-                "posting_date": posting_date,
-                "CREATED_DATE": created_date,
-                "due_date": due_date,
-                "TOTAL_DUE": total_gross,
-                "Description": f"{doc_type} for {grouping_id} (Markup: £{total_markup:.2f})",
+                "INVOICE_NO": "",
+                "PO_NO": "",
+                "CUSTOMER_ID": customer_id,
+                "posting_date": posting_date_str,
+                "CREATED_DATE": created_date_str,
+                "due_date": due_date_str,
+                "TOTAL_DUE": round(total_gross, 2),
+                "Description": memo_text,
                 "LINE_NO": 1,
-                "MEMO": "Net at 20% Tax",
+                "MEMO": memo_text,
                 "ACCT_NO": gl_code,
                 "LOCATION_ID": "AMH",
                 "AMOUNT": net_20,
                 "SUPDOCID": "",
                 "TAX_LINE_NO": 1,
                 "TAX_AMOUNT": tax_20,
-                "TAX_DETAILID": "UK Sale Goods Standard Rate"
+                "TAX_DETAILID": "UK Sale Goods Standard Rate",
+                "ARINVOICEITEM_CLASSID": grouping_id,
+                "ARINVOICEITEM_CUSTOMERID": customer_id
             })
         if net_0 != 0 and net_20 != 0:
             invoice_lines.append({
                 "DONOTIMPORT": "",
                 "INVOICE_NO": "",
+                "PO_NO": "",
                 "CUSTOMER_ID": "",
                 "posting_date": "",
                 "CREATED_DATE": "",
                 "due_date": "",
                 "TOTAL_DUE": "",
                 "Description": "",
-                "LINE_NO": 1,
-                "MEMO": "Net at 20% Tax",
+                "LINE_NO": 2,
+                "MEMO": memo_text,
                 "ACCT_NO": gl_code,
                 "LOCATION_ID": "AMH",
                 "AMOUNT": net_20,
                 "SUPDOCID": "",
                 "TAX_LINE_NO": 1,
                 "TAX_AMOUNT": tax_20,
-                "TAX_DETAILID": "UK Sale Goods Standard Rate"
+                "TAX_DETAILID": "UK Sale Goods Standard Rate",
+                "ARINVOICEITEM_CLASSID": grouping_id,
+                "ARINVOICEITEM_CUSTOMERID": customer_id
             })
     return pd.DataFrame(invoice_lines)
 
@@ -455,7 +627,7 @@ def create_email_structure(data_df, summaries, output_bucket, dimensions_df):
         }
         month_name = period_months.get(str(period_code).zfill(2), "Unknown")
         file_name = f"summaries/{class_id.replace('/', '-')}_INV_SUMM_{client_name}_{month_name}_{timestamp}.xlsx"
-        upload_to_s3(summary_df, output_bucket, file_name)
+        upload_summary_to_s3(summary_df, output_bucket, file_name)
         email_structure.append({
             "Unit Code": unit_code,
             "Document Grouping": class_id,
@@ -571,7 +743,7 @@ def lambda_handler(event, context):
             safe_class_id = class_id.replace("/", "-")
             client_name = get_client_name(class_id, dimensions_df).replace(" ", "_").replace("/", "-")
             summary_file_key = f"summaries/{input_file_name}_Summary_{client_name}_{safe_class_id}_{timestamp}.xlsx"
-            upload_to_s3(summary_df, OUTPUT_BUCKET, summary_file_key)
+            upload_summary_to_s3(summary_df, OUTPUT_BUCKET, summary_file_key)
             output_files.append({
                 'type': 'CLIENT_SUMMARY',
                 's3Key': summary_file_key,
@@ -585,14 +757,13 @@ def lambda_handler(event, context):
         
         if can_update_dynamodb:
             print("🔗 Generating presigned download URLs...")
-            # Generate presigned URLs for all output files
             download_urls = generate_presigned_urls(output_files)
             
             print("💾 Updating DynamoDB with output files and download URLs...")
             update_result = update_file_metadata(file_id, {
                 'status': 'PROCESSED',
-                'outputFiles': output_files,  # Keep original for reference
-                'downloadUrls': download_urls,  # NEW: Add presigned URLs
+                'outputFiles': output_files,
+                'downloadUrls': download_urls,
                 'processedDate': datetime.now().isoformat()
             })
             
