@@ -470,11 +470,19 @@ def create_invoice_template(data_df, units_df, mark_up_adjustments_df):
         base_total_gross = group["Total Amount"].sum()
         base_total_tax = group["Transaction Tax"].sum()
         total_markup = 0
+        markup_tax = 0
         for _, row in group.iterrows():
             markup_rate = get_markup_rate(row, mark_up_adjustments_df)
-            total_markup += row["Total Amount"] * markup_rate if markup_rate else 0
+            if markup_rate:
+                row_markup_gross = row["Total Amount"] * markup_rate
+                total_markup += row_markup_gross
+                # If the original line had VAT, markup also attracts VAT at the same effective rate
+                if row["Transaction Tax"] != 0 and row["Total Amount"] != 0:
+                    effective_tax_rate = row["Transaction Tax"] / row["Total Amount"]
+                    markup_tax += row_markup_gross * effective_tax_rate
         total_gross = base_total_gross + total_markup
-        total_tax = base_total_tax
+        total_tax = base_total_tax + markup_tax
+
         doc_type = "Invoice" if total_gross >= 0 else "Credit"
         
         # Handle missing dates gracefully
