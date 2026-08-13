@@ -142,7 +142,7 @@ const FileDashboard = ({ user }) => {
       setLoading(true);
       setError(null);
       
-      // UPDATED QUERY - ADDED downloadUrls
+      // UPDATED QUERY - ADDED downloadUrls, boxUploaded, boxUploadedAt
       const query = `
         query ListFileMetadata {
           listFileMetadata(limit: 100) {
@@ -153,6 +153,8 @@ const FileDashboard = ({ user }) => {
               approvalStatus
               uploadDate
               createdBy
+              boxUploaded
+              boxUploadedAt
               # NEW FIELD ADDED:
               downloadUrls {
                 fileName
@@ -188,13 +190,34 @@ const FileDashboard = ({ user }) => {
 
     } catch (error) {
       console.error('❌ Error fetching files:', error);
-      setError(error.message);
-      
+
+      // NEW: AppSync can return BOTH partial `data` and `errors` together —
+      // e.g. one bad field (like a malformed date) fails to serialize, but
+      // every other item/field in the response is still valid. Previously
+      // this branch discarded `error.data` entirely and showed a full error
+      // screen even when 44/44 files were actually fine. Use the partial
+      // data if it's there instead of throwing it away.
+      const partialItems = error.data?.listFileMetadata?.items;
+
+      if (partialItems && partialItems.length > 0) {
+        const sortedFiles = partialItems.sort((a, b) =>
+          new Date(b.uploadDate) - new Date(a.uploadDate)
+        );
+
+        console.log(`📁 Loaded ${sortedFiles.length} files despite partial errors`);
+        setFiles(sortedFiles);
+        setError('Some fields could not be loaded for one or more files (see console for details)');
+      } else {
+        setError(error.message);
+      }
+
       if (error.errors) {
         console.error('First GraphQL error:', error.errors[0]);
-        
-        // Try fallback query with even fewer fields
-        if (error.errors[0]?.message?.includes('non-nullable')) {
+
+        // Only fall back to the minimal query if we don't already have
+        // usable partial data, and this looks like a field-availability
+        // issue rather than a serialization issue on otherwise-good data.
+        if (!partialItems && error.errors[0]?.message?.includes('non-nullable')) {
           console.log('Trying fallback query...');
           await fetchFilesFallback();
         }
@@ -325,6 +348,12 @@ const FileDashboard = ({ user }) => {
     // Check if file has downloads
     const hasDownloads = file.downloadUrls && file.downloadUrls.length > 0;
 
+    // Box upload status
+    const isInBox = file.boxUploaded === true;
+    const boxUploadedAt = file.boxUploadedAt
+      ? new Date(file.boxUploadedAt).toLocaleString()
+      : null;
+
     return (
       <div key={file.id} style={{
         padding: '15px',
@@ -342,6 +371,7 @@ const FileDashboard = ({ user }) => {
                 <strong>Uploaded:</strong> {uploadDate}
                 {createdBy && createdBy !== 'Unknown' && ` by ${createdBy}`}
               </p>
+
               {/* NEW: Download status info */}
               {file.status === 'PROCESSED' && hasDownloads && (
                 <p style={{ margin: '2px 0', color: '#28a745', fontSize: '11px' }}>
@@ -353,6 +383,15 @@ const FileDashboard = ({ user }) => {
                   ⏳ Processing downloads...
                 </p>
               )}
+
+              {/* NEW: Box status line */}
+              <p style={{ margin: '2px 0' }}>
+                <strong>Box:</strong>{' '}
+                {isInBox
+                  ? `Uploaded${boxUploadedAt ? ` on ${boxUploadedAt}` : ''}`
+                  : 'Not uploaded'}
+              </p>
+
               <p style={{ margin: '2px 0', fontFamily: 'monospace', fontSize: '11px' }}>
                 <strong>ID:</strong> {file.id.substring(0, 12)}...
               </p>
@@ -472,6 +511,20 @@ const FileDashboard = ({ user }) => {
             }}>
               {approvalStatus}
             </span>
+
+            {/* NEW: "In Box" badge — only shows when file is in Box */}
+            {isInBox && (
+              <span style={{
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                color: 'white',
+                backgroundColor: '#0061d5'
+              }}>
+                📦 In Box
+              </span>
+            )}
           </div>
         </div>
       </div>

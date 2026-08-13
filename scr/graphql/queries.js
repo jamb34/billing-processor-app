@@ -30,6 +30,8 @@ export const getFileMetadata = /* GraphQL */ `
         __typename
       }
       createdBy
+      boxUploaded
+      boxUploadedAt
       createdAt
       updatedAt
       owner
@@ -57,6 +59,8 @@ export const listFileMetadata = /* GraphQL */ `
         rejectedDate
         rejectionReason
         createdBy
+        boxUploaded
+        boxUploadedAt
         createdAt
         updatedAt
         owner

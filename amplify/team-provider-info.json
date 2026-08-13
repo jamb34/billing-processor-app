@@ -19,15 +19,15 @@
       "function": {
         "billingvalidator": {
           "deploymentBucketName": "amplify-allmanhall-dev-23033-deployment",
-          "s3Key": "amplify-builds/billingvalidator-6c513045744b704a614c-build.zip"
+          "s3Key": "amplify-builds/billingvalidator-4536645141584e756645-build.zip"
         },
         "allmanhall2b82687c": {
           "deploymentBucketName": "amplify-allmanhall-dev-23033-deployment",
-          "s3Key": "amplify-builds/allmanhall2b82687c-546f5563554f742f6443-build.zip"
+          "s3Key": "amplify-builds/allmanhall2b82687c-734c44505669565a3565-build.zip"
         },
         "allmanhalla5460e60": {
           "deploymentBucketName": "amplify-allmanhall-dev-23033-deployment",
-          "s3Key": "amplify-builds/allmanhalla5460e60-786d456c4273354d7870-build.zip"
+          "s3Key": "amplify-builds/allmanhalla5460e60-41542f756746514d3734-build.zip"
         }
       },
       "storage": {

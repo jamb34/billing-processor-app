@@ -5,7 +5,7 @@
  **************************************************************************/
 
 import * as React from "react";
-import { GridProps, SelectFieldProps, TextFieldProps } from "@aws-amplify/ui-react";
+import { GridProps, SelectFieldProps, SwitchFieldProps, TextFieldProps } from "@aws-amplify/ui-react";
 export declare type EscapeHatchProps = {
     [elementHierarchy: string]: Record<string, unknown>;
 } | null;
@@ -33,6 +33,8 @@ export declare type FileMetadataCreateFormInputValues = {
     rejectedDate?: string;
     rejectionReason?: string;
     createdBy?: string;
+    boxUploaded?: boolean;
+    boxUploadedAt?: string;
 };
 export declare type FileMetadataCreateFormValidationValues = {
     fileName?: ValidationFunction<string>;
@@ -46,6 +48,8 @@ export declare type FileMetadataCreateFormValidationValues = {
     rejectedDate?: ValidationFunction<string>;
     rejectionReason?: ValidationFunction<string>;
     createdBy?: ValidationFunction<string>;
+    boxUploaded?: ValidationFunction<boolean>;
+    boxUploadedAt?: ValidationFunction<string>;
 };
 export declare type PrimitiveOverrideProps<T> = Partial<T> & React.DOMAttributes<HTMLDivElement>;
 export declare type FileMetadataCreateFormOverridesProps = {
@@ -61,6 +65,8 @@ export declare type FileMetadataCreateFormOverridesProps = {
     rejectedDate?: PrimitiveOverrideProps<TextFieldProps>;
     rejectionReason?: PrimitiveOverrideProps<TextFieldProps>;
     createdBy?: PrimitiveOverrideProps<TextFieldProps>;
+    boxUploaded?: PrimitiveOverrideProps<SwitchFieldProps>;
+    boxUploadedAt?: PrimitiveOverrideProps<TextFieldProps>;
 } & EscapeHatchProps;
 export declare type FileMetadataCreateFormProps = React.PropsWithChildren<{
     overrides?: FileMetadataCreateFormOverridesProps | undefined | null;

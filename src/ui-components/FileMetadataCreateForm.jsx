@@ -11,6 +11,7 @@ import {
   Flex,
   Grid,
   SelectField,
+  SwitchField,
   TextField,
 } from "@aws-amplify/ui-react";
 import { fetchByPath, getOverrideProps, validateField } from "./utils";
@@ -40,6 +41,8 @@ export default function FileMetadataCreateForm(props) {
     rejectedDate: "",
     rejectionReason: "",
     createdBy: "",
+    boxUploaded: false,
+    boxUploadedAt: "",
   };
   const [fileName, setFileName] = React.useState(initialValues.fileName);
   const [fileSize, setFileSize] = React.useState(initialValues.fileSize);
@@ -62,6 +65,12 @@ export default function FileMetadataCreateForm(props) {
     initialValues.rejectionReason
   );
   const [createdBy, setCreatedBy] = React.useState(initialValues.createdBy);
+  const [boxUploaded, setBoxUploaded] = React.useState(
+    initialValues.boxUploaded
+  );
+  const [boxUploadedAt, setBoxUploadedAt] = React.useState(
+    initialValues.boxUploadedAt
+  );
   const [errors, setErrors] = React.useState({});
   const resetStateValues = () => {
     setFileName(initialValues.fileName);
@@ -75,6 +84,8 @@ export default function FileMetadataCreateForm(props) {
     setRejectedDate(initialValues.rejectedDate);
     setRejectionReason(initialValues.rejectionReason);
     setCreatedBy(initialValues.createdBy);
+    setBoxUploaded(initialValues.boxUploaded);
+    setBoxUploadedAt(initialValues.boxUploadedAt);
     setErrors({});
   };
   const validations = {
@@ -89,6 +100,8 @@ export default function FileMetadataCreateForm(props) {
     rejectedDate: [],
     rejectionReason: [],
     createdBy: [{ type: "Required" }],
+    boxUploaded: [],
+    boxUploadedAt: [],
   };
   const runValidationTasks = async (
     fieldName,
@@ -144,6 +157,8 @@ export default function FileMetadataCreateForm(props) {
           rejectedDate,
           rejectionReason,
           createdBy,
+          boxUploaded,
+          boxUploadedAt,
         };
         const validationResponses = await Promise.all(
           Object.keys(validations).reduce((promises, fieldName) => {
@@ -217,6 +232,8 @@ export default function FileMetadataCreateForm(props) {
               rejectedDate,
               rejectionReason,
               createdBy,
+              boxUploaded,
+              boxUploadedAt,
             };
             const result = onChange(modelFields);
             value = result?.fileName ?? value;
@@ -255,6 +272,8 @@ export default function FileMetadataCreateForm(props) {
               rejectedDate,
               rejectionReason,
               createdBy,
+              boxUploaded,
+              boxUploadedAt,
             };
             const result = onChange(modelFields);
             value = result?.fileSize ?? value;
@@ -289,6 +308,8 @@ export default function FileMetadataCreateForm(props) {
               rejectedDate,
               rejectionReason,
               createdBy,
+              boxUploaded,
+              boxUploadedAt,
             };
             const result = onChange(modelFields);
             value = result?.s3Key ?? value;
@@ -323,6 +344,8 @@ export default function FileMetadataCreateForm(props) {
               rejectedDate,
               rejectionReason,
               createdBy,
+              boxUploaded,
+              boxUploadedAt,
             };
             const result = onChange(modelFields);
             value = result?.status ?? value;
@@ -378,6 +401,8 @@ export default function FileMetadataCreateForm(props) {
               rejectedDate,
               rejectionReason,
               createdBy,
+              boxUploaded,
+              boxUploadedAt,
             };
             const result = onChange(modelFields);
             value = result?.approvalStatus ?? value;
@@ -430,6 +455,8 @@ export default function FileMetadataCreateForm(props) {
               rejectedDate,
               rejectionReason,
               createdBy,
+              boxUploaded,
+              boxUploadedAt,
             };
             const result = onChange(modelFields);
             value = result?.uploadDate ?? value;
@@ -466,6 +493,8 @@ export default function FileMetadataCreateForm(props) {
               rejectedDate,
               rejectionReason,
               createdBy,
+              boxUploaded,
+              boxUploadedAt,
             };
             const result = onChange(modelFields);
             value = result?.processedDate ?? value;
@@ -502,6 +531,8 @@ export default function FileMetadataCreateForm(props) {
               rejectedDate,
               rejectionReason,
               createdBy,
+              boxUploaded,
+              boxUploadedAt,
             };
             const result = onChange(modelFields);
             value = result?.approvedDate ?? value;
@@ -538,6 +569,8 @@ export default function FileMetadataCreateForm(props) {
               rejectedDate: value,
               rejectionReason,
               createdBy,
+              boxUploaded,
+              boxUploadedAt,
             };
             const result = onChange(modelFields);
             value = result?.rejectedDate ?? value;
@@ -572,6 +605,8 @@ export default function FileMetadataCreateForm(props) {
               rejectedDate,
               rejectionReason: value,
               createdBy,
+              boxUploaded,
+              boxUploadedAt,
             };
             const result = onChange(modelFields);
             value = result?.rejectionReason ?? value;
@@ -606,6 +641,8 @@ export default function FileMetadataCreateForm(props) {
               rejectedDate,
               rejectionReason,
               createdBy: value,
+              boxUploaded,
+              boxUploadedAt,
             };
             const result = onChange(modelFields);
             value = result?.createdBy ?? value;
@@ -619,6 +656,80 @@ export default function FileMetadataCreateForm(props) {
         errorMessage={errors.createdBy?.errorMessage}
         hasError={errors.createdBy?.hasError}
         {...getOverrideProps(overrides, "createdBy")}
+      ></TextField>
+      <SwitchField
+        label="Box uploaded"
+        defaultChecked={false}
+        isDisabled={false}
+        isChecked={boxUploaded}
+        onChange={(e) => {
+          let value = e.target.checked;
+          if (onChange) {
+            const modelFields = {
+              fileName,
+              fileSize,
+              s3Key,
+              status,
+              approvalStatus,
+              uploadDate,
+              processedDate,
+              approvedDate,
+              rejectedDate,
+              rejectionReason,
+              createdBy,
+              boxUploaded: value,
+              boxUploadedAt,
+            };
+            const result = onChange(modelFields);
+            value = result?.boxUploaded ?? value;
+          }
+          if (errors.boxUploaded?.hasError) {
+            runValidationTasks("boxUploaded", value);
+          }
+          setBoxUploaded(value);
+        }}
+        onBlur={() => runValidationTasks("boxUploaded", boxUploaded)}
+        errorMessage={errors.boxUploaded?.errorMessage}
+        hasError={errors.boxUploaded?.hasError}
+        {...getOverrideProps(overrides, "boxUploaded")}
+      ></SwitchField>
+      <TextField
+        label="Box uploaded at"
+        isRequired={false}
+        isReadOnly={false}
+        type="datetime-local"
+        value={boxUploadedAt && convertToLocal(new Date(boxUploadedAt))}
+        onChange={(e) => {
+          let value =
+            e.target.value === "" ? "" : new Date(e.target.value).toISOString();
+          if (onChange) {
+            const modelFields = {
+              fileName,
+              fileSize,
+              s3Key,
+              status,
+              approvalStatus,
+              uploadDate,
+              processedDate,
+              approvedDate,
+              rejectedDate,
+              rejectionReason,
+              createdBy,
+              boxUploaded,
+              boxUploadedAt: value,
+            };
+            const result = onChange(modelFields);
+            value = result?.boxUploadedAt ?? value;
+          }
+          if (errors.boxUploadedAt?.hasError) {
+            runValidationTasks("boxUploadedAt", value);
+          }
+          setBoxUploadedAt(value);
+        }}
+        onBlur={() => runValidationTasks("boxUploadedAt", boxUploadedAt)}
+        errorMessage={errors.boxUploadedAt?.errorMessage}
+        hasError={errors.boxUploadedAt?.hasError}
+        {...getOverrideProps(overrides, "boxUploadedAt")}
       ></TextField>
       <Flex
         justifyContent="space-between"

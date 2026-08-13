@@ -16,13 +16,15 @@ type FileMetadata @model @auth(rules: [
   outputFiles: [OutputFile]
   downloadUrls: [DownloadUrl]
   createdBy: String!
+  boxUploaded: Boolean
+  boxUploadedAt: AWSDateTime
 }
 
 type OutputFile {
   type: String!
   s3Key: String!
   fileName: String!
-  generatedDate: AWSDateTime!
+  generatedDate: AWSDateTime
 }
 
 type DownloadUrl {

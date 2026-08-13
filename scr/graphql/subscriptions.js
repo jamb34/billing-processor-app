@@ -33,6 +33,8 @@ export const onCreateFileMetadata = /* GraphQL */ `
         __typename
       }
       createdBy
+      boxUploaded
+      boxUploadedAt
       createdAt
       updatedAt
       owner
@@ -72,6 +74,8 @@ export const onUpdateFileMetadata = /* GraphQL */ `
         __typename
       }
       createdBy
+      boxUploaded
+      boxUploadedAt
       createdAt
       updatedAt
       owner
@@ -111,6 +115,8 @@ export const onDeleteFileMetadata = /* GraphQL */ `
         __typename
       }
       createdBy
+      boxUploaded
+      boxUploadedAt
       createdAt
       updatedAt
       owner
