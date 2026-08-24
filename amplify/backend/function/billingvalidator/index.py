@@ -435,62 +435,78 @@ def add_dimension_columns(data_df, units_df, dimensions_df):
     return data_df
 
 
-def _build_period_display(period_code, posting_date):
-    """Convert a period code (e.g. '2024/001') to a short display string (e.g. 'Aug 2024')."""
-    period_months = {
-        "001": "Aug", "002": "Sep", "003": "Oct", "004": "Nov",
-        "005": "Dec", "006": "Jan", "007": "Feb", "008": "Mar",
-        "009": "Apr", "010": "May", "011": "Jun", "012": "Jul"
-    }
+# Financial year period-to-month mapping (post-extension, 2026 onward).
+# The 2026 FY was extended to run through December: Aug-Dec now continue as
+# periods 13-17 instead of wrapping back to period 1. Periods 8-12 are
+# no longer used. Old-format codes (pre-extension) are historical only and
+# are not reprocessed, so no dual-scheme handling is needed here.
+PERIOD_MONTH_ABBR = {
+    1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul",
+    13: "Aug", 14: "Sep", 15: "Oct", 16: "Nov", 17: "Dec",
+}
+PERIOD_MONTH_LONG = {
+    1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June", 7: "July",
+    13: "August", 14: "September", 15: "October", 16: "November", 17: "December",
+}
+
+
+def _parse_period_code(period_code):
+    """Split a period code like '2026/013' or bare '13' into (year_part, period_num).
+    period_num is normalised to an int so it doesn't matter whether the source
+    system sends '013', '13', '01', etc. Returns (year_part, None) if the
+    period number can't be parsed.
+    """
+    code_str = str(period_code).strip()
+    if not code_str or code_str.lower() in ("nan", "unknown", "none", ""):
+        return None, None
+
+    parts = code_str.split('/')
+    if len(parts) > 1:
+        year_part, period_part = parts[0], parts[-1]
+    else:
+        year_part, period_part = None, parts[0]
+
     try:
-        parts       = str(period_code).split('/')
-        year_part   = parts[0] if len(parts) > 0 else str(posting_date.year)
-        period_part = parts[1] if len(parts) > 1 else "001"
-        month_abbr  = period_months.get(period_part, "")
-        return f"{month_abbr} {year_part}"
-    except Exception:
+        period_num = int(period_part)
+    except (ValueError, TypeError):
+        return year_part, None
+
+    return year_part, period_num
+
+
+def _build_period_display(period_code, posting_date):
+    """Convert a period code (e.g. '2026/013') to a short display string (e.g. 'Aug 2026')."""
+    year_part, period_num = _parse_period_code(period_code)
+    month_abbr = PERIOD_MONTH_ABBR.get(period_num, "")
+
+    if not month_abbr:
+        print(f"⚠️ _build_period_display: period number '{period_num}' (from '{period_code}') not in lookup")
         return posting_date.strftime("%b %Y")
+
+    year = year_part if year_part else str(posting_date.year)
+    return f"{month_abbr} {year}"
 
 
 def _build_period_display_long(period_code):
     """Convert a period code to a 'P{n} Month' label for the A1 client label,
-    sheet tab, and filename (e.g. 'P10 May').
+    sheet tab, and filename (e.g. 'P13 August').
 
-    Handles both full period codes like '2024/010' and bare numbers like '10'.
+    Handles full period codes like '2026/013' and bare numbers like '13'.
     Falls back gracefully — never returns 'Unknown', instead logs a warning and
     returns an empty string so the caller can decide what to show.
     """
-    period_months_long = {
-        "1":  "August",    "2":  "September", "3":  "October",  "4":  "November",
-        "5":  "December",  "6":  "January",   "7":  "February", "8":  "March",
-        "9":  "April",     "10": "May",        "11": "June",     "12": "July"
-    }
-    try:
-        code_str = str(period_code).strip()
-
-        # Handle NaN / empty values passed in from fillna("Unknown") upstream
-        if not code_str or code_str.lower() in ("nan", "unknown", "none", ""):
-            print(f"⚠️ _build_period_display_long: empty/unknown period code '{period_code}'")
-            return ""
-
-        # Handle full period codes like '2024/010' — take the part after '/'
-        if '/' in code_str:
-            code_str = code_str.split('/')[-1]
-
-        # Strip leading zeros so '010' -> '10', then look up
-        period_num = str(int(code_str))
-        month_name = period_months_long.get(period_num)
-
-        if month_name:
-            print(f"✅ Period code '{period_code}' -> P{period_num} {month_name}")
-            return f"P{period_num} {month_name}"
-        else:
-            print(f"⚠️ _build_period_display_long: period number '{period_num}' not in lookup (from '{period_code}')")
-            return ""
-
-    except Exception as e:
-        print(f"⚠️ _build_period_display_long: could not parse '{period_code}': {e}")
+    year_part, period_num = _parse_period_code(period_code)
+    if period_num is None:
+        print(f"⚠️ _build_period_display_long: empty/unparseable period code '{period_code}'")
         return ""
+
+    month_name = PERIOD_MONTH_LONG.get(period_num)
+    if not month_name:
+        print(f"⚠️ _build_period_display_long: period number '{period_num}' not in lookup (from '{period_code}')")
+        return ""
+
+    print(f"✅ Period code '{period_code}' -> P{period_num} {month_name}")
+    return f"P{period_num} {month_name}"
 
 
 def generate_summary_sheets(data_df, units_df, mark_up_adjustments_df, dimensions_df):

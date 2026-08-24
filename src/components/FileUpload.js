@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { uploadData } from 'aws-amplify/storage';
 import { generateClient } from 'aws-amplify/api';
 import { Amplify } from 'aws-amplify';
+import { getCurrentUser } from 'aws-amplify/auth';
 import config from '../amplifyconfiguration.json';
 
 // Configure Amplify
@@ -19,13 +20,17 @@ const FileUpload = () => {
 
     setUploading(true);
     setMessage('');
-    
+
     try {
+      // Moved inside try/catch so an auth failure (expired session, no
+      // logged-in user, etc.) is caught and surfaced via setMessage
+      // instead of failing silently before uploading even starts.
+      const { username } = await getCurrentUser();
+
       console.log('1. Starting S3 upload...');
-      
-      // CORRECT: Remove 'public/' since Amplify adds it automatically
+
       const s3Key = `uploads/${Date.now()}-${file.name}`;
-      
+
       const uploadResult = await uploadData({
         key: s3Key,
         data: file,
@@ -37,10 +42,9 @@ const FileUpload = () => {
 
       console.log('2. S3 upload successful:', uploadResult);
       console.log('2a. S3 Key used:', s3Key);
-      
-      // Save to DynamoDB with the S3 key we used (without public/)
+
       console.log('3. Attempting DynamoDB save...');
-      
+
       const createFileMetadataMutation = `
         mutation CreateFileMetadata($input: CreateFileMetadataInput!) {
           createFileMetadata(input: $input) {
@@ -56,41 +60,40 @@ const FileUpload = () => {
         input: {
           fileName: file.name,
           fileSize: file.size,
-          s3Key: s3Key, // This is uploads/... (Amplify will make it public/uploads/...)
+          s3Key: s3Key,
           status: 'UPLOADED',
           approvalStatus: 'PENDING',
           uploadDate: new Date().toISOString(),
-          createdBy: 'user' // This will be overwritten by the owner field automatically
+          createdBy: username
         }
       };
 
       console.log('4. GraphQL variables:', variables);
-      
+
       const dbResult = await client.graphql({
         query: createFileMetadataMutation,
         variables: variables
-        // REMOVED: authMode parameter - uses default owner-based auth
       });
 
       console.log('5. DynamoDB save successful:', dbResult);
       console.log('5a. File ID created:', dbResult.data.createFileMetadata.id);
-      
+
       setMessage(`✅ File "${file.name}" uploaded! S3 + Database updated. Processing will start automatically...`);
-      
+
     } catch (error) {
       console.error('=== FULL ERROR DETAILS ===');
       console.error('Error object:', error);
       console.error('Error message:', error.message);
       console.error('Error name:', error.name);
       console.error('Error stack:', error.stack);
-      
+
       if (error.errors) {
         console.error('GraphQL errors:', error.errors);
         error.errors.forEach((err, index) => {
           console.error(`GraphQL error ${index}:`, err);
         });
       }
-      
+
       if (error.message && error.message.includes('Network error')) {
         setMessage('❌ Network error - check internet connection');
       } else if (error.errors && error.errors[0] && error.errors[0].message) {
