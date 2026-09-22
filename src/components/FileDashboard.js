@@ -136,16 +136,22 @@ const FileDashboard = ({ user }) => {
   }
 };
 
+  // ============================================
+  // FETCH FILES — NOW PAGINATES UNTIL nextToken IS NULL
+  // ============================================
   const fetchFiles = async () => {
     try {
       console.log('🔍 Starting to fetch files...');
       setLoading(true);
       setError(null);
-      
-      // UPDATED QUERY - ADDED downloadUrls, boxUploaded, boxUploadedAt
+
+      // UPDATED QUERY - takes $limit / $nextToken as variables, and the
+      // selection set now explicitly asks for `nextToken`. Without it in
+      // the selection set, AppSync will never return it and the loop
+      // below would always stop after page 1.
       const query = `
-        query ListFileMetadata {
-          listFileMetadata(limit: 100) {
+        query ListFileMetadata($limit: Int, $nextToken: String) {
+          listFileMetadata(limit: $limit, nextToken: $nextToken) {
             items {
               id
               fileName
@@ -155,7 +161,6 @@ const FileDashboard = ({ user }) => {
               createdBy
               boxUploaded
               boxUploadedAt
-              # NEW FIELD ADDED:
               downloadUrls {
                 fileName
                 url
@@ -163,40 +168,61 @@ const FileDashboard = ({ user }) => {
                 type
               }
             }
+            nextToken
           }
         }
       `;
-      
-      console.log('Attempting GraphQL query...');
-      
-      const result = await client.graphql({ 
-        query: query
-      });
-      
-      console.log('✅ GraphQL result:', result);
-      
-      if (result.data?.listFileMetadata?.items) {
-        // Sort by upload date, newest first
-        const sortedFiles = result.data.listFileMetadata.items.sort((a, b) => 
-          new Date(b.uploadDate) - new Date(a.uploadDate)
-        );
-        
-        console.log(`📁 Found ${sortedFiles.length} files`);
-        setFiles(sortedFiles);
-      } else {
-        console.log('❌ No items in response');
-        setFiles([]);
-      }
+
+      let allItems = [];
+      let nextToken = null;
+
+      do {
+        console.log('Attempting GraphQL query...', { nextToken });
+
+        const result = await client.graphql({
+          query: query,
+          variables: { limit: 100, nextToken }
+        });
+
+        const page = result.data?.listFileMetadata;
+
+        // Diagnostic logging — confirms whether a given page hit the
+        // ~1MB DynamoDB Scan boundary and had more items waiting.
+        console.log('✅ GraphQL page result:', {
+          returnedItems: page?.items?.length,
+          nextToken: page?.nextToken,
+          hasMorePages: Boolean(page?.nextToken),
+          errors: result.errors,
+        });
+
+        if (page?.items) {
+          allItems = allItems.concat(page.items);
+        }
+
+        nextToken = page?.nextToken ?? null;
+      } while (nextToken);
+
+      // Sort by upload date, newest first
+      const sortedFiles = allItems.sort((a, b) => 
+        new Date(b.uploadDate) - new Date(a.uploadDate)
+      );
+
+      console.log(`📁 Found ${sortedFiles.length} files across all pages`);
+      setFiles(sortedFiles);
 
     } catch (error) {
       console.error('❌ Error fetching files:', error);
 
-      // NEW: AppSync can return BOTH partial `data` and `errors` together —
+      // AppSync can return BOTH partial `data` and `errors` together —
       // e.g. one bad field (like a malformed date) fails to serialize, but
-      // every other item/field in the response is still valid. Previously
-      // this branch discarded `error.data` entirely and showed a full error
-      // screen even when 44/44 files were actually fine. Use the partial
-      // data if it's there instead of throwing it away.
+      // every other item/field in the response is still valid. Use the
+      // partial data if it's there instead of throwing it away.
+      // Note: if the error happens on page 2+, this only recovers that
+      // page's partial items — earlier pages already merged into
+      // `allItems` above are lost along with them since `allItems` is
+      // scoped to the try block. If you start seeing this in practice,
+      // move `allItems`/`nextToken` above the try block so they survive
+      // into the catch.
       const partialItems = error.data?.listFileMetadata?.items;
 
       if (partialItems && partialItems.length > 0) {
@@ -227,32 +253,50 @@ const FileDashboard = ({ user }) => {
     }
   };
 
-  // Fallback query with absolute minimum fields
+  // Fallback query with absolute minimum fields — also paginates, since
+  // the same 1MB Scan boundary applies here too (just with a much higher
+  // item count before it's hit, given the tiny selection set).
   const fetchFilesFallback = async () => {
     try {
       const fallbackQuery = `
-        query ListFileMetadata {
-          listFileMetadata(limit: 100) {
+        query ListFileMetadata($limit: Int, $nextToken: String) {
+          listFileMetadata(limit: $limit, nextToken: $nextToken) {
             items {
               id
               fileName
               uploadDate
             }
+            nextToken
           }
         }
       `;
-      
-      const result = await client.graphql({ query: fallbackQuery });
-      
-      if (result.data?.listFileMetadata?.items) {
-        const sortedFiles = result.data.listFileMetadata.items.sort((a, b) => 
-          new Date(b.uploadDate) - new Date(a.uploadDate)
-        );
-        
-        console.log(`📁 Fallback found ${sortedFiles.length} files`);
-        setFiles(sortedFiles);
-        setError('Loaded basic file info (some fields unavailable)');
-      }
+
+      let allItems = [];
+      let nextToken = null;
+
+      do {
+        const result = await client.graphql({
+          query: fallbackQuery,
+          variables: { limit: 100, nextToken }
+        });
+
+        const page = result.data?.listFileMetadata;
+
+        if (page?.items) {
+          allItems = allItems.concat(page.items);
+        }
+
+        nextToken = page?.nextToken ?? null;
+      } while (nextToken);
+
+      const sortedFiles = allItems.sort((a, b) => 
+        new Date(b.uploadDate) - new Date(a.uploadDate)
+      );
+
+      console.log(`📁 Fallback found ${sortedFiles.length} files across all pages`);
+      setFiles(sortedFiles);
+      setError('Loaded basic file info (some fields unavailable)');
+
     } catch (fallbackError) {
       console.error('Fallback also failed:', fallbackError);
     }

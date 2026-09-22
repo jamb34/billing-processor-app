@@ -51,8 +51,55 @@ def eom_date(date_obj):
     return next_month - timedelta(days=next_month.day)
 
 
+def get_majority_month_posting_date(date_series, grouping_id):
+    """Return the end-of-month date for the calendar month that the MAJORITY
+    of transaction lines in this invoice grouping actually fall into.
+
+    BUG FIX: posting_date/created_date were previously derived from
+    group["Date"].min() — the single EARLIEST transaction date in the whole
+    group. If a small number of late/missed invoices from a prior month get
+    caught up in an otherwise current-month batch, that one outlier dragged
+    the entire invoice's posting/created date back into a prior (often
+    already-closed) period, which Sage then rejects. Using the majority
+    month instead means a few late lines no longer override the batch's real
+    billing month; ties are broken toward the most recent month.
+
+    Returns None if there are no valid dates at all (caller falls back to
+    today's date, as before).
+    """
+    valid_dates = date_series.dropna()
+    if valid_dates.empty:
+        return None
+
+    month_periods = valid_dates.dt.to_period('M')
+    period_counts = month_periods.value_counts()
+    top_count = period_counts.max()
+    # Ties go to the most recent month, since that's the more likely
+    # "current billing month" when line counts are otherwise equal.
+    majority_period = period_counts[period_counts == top_count].index.max()
+
+    min_period = month_periods.min()
+    if majority_period != min_period:
+        outlier_count = (month_periods != majority_period).sum()
+        print(f"📅 Group '{grouping_id}': {outlier_count} line(s) fall outside "
+              f"the majority month ({majority_period}); using {majority_period} "
+              f"for posting/created date instead of the earliest transaction date")
+
+    return eom_date(majority_period.to_timestamp())
+
+
 def calculate_tax_split(gross_amount, tax_amount):
-    net_20 = tax_amount * 5 if tax_amount > 0 else 0
+    # BUG FIX: previously used "tax_amount > 0" here, which meant a negative
+    # tax_amount (a credit/refund line where VAT nets negative) fell through
+    # to net_20 = 0, dumping the ENTIRE amount — including the VAT portion —
+    # into net_0 (zero-rated). The VAT effectively vanished from that line
+    # instead of being recorded as a negative (credit) VAT amount. Splitting
+    # memo lines by D4 (Column U) surfaces this because each D4 subtotal is
+    # now computed independently, so a D4 line whose own total nets negative
+    # hits this branch directly, instead of being absorbed into a larger
+    # positive group-level total as before. Fixed by using "!= 0" so negative
+    # tax amounts are still split proportionally.
+    net_20 = tax_amount * 5 if tax_amount != 0 else 0
     net_0 = gross_amount - tax_amount - net_20
     if abs(net_0) < 0.20:
         net_20 += net_0
@@ -71,10 +118,27 @@ def get_gl_code(dimension_type):
     return gl_codes.get(dimension_type, 4000)
 
 
+def _normalize_id(value):
+    """Normalize an ID-like value for robust matching: cast to string and
+    strip whitespace. Guards against the same code being entered
+    inconsistently between a source file and a config sheet — e.g. a
+    trailing space ('R148/2 ' vs 'R148/2'), or one side being read in as a
+    number and the other as text. Plain pandas '==' comparison is brittle to
+    both of these and fails silently (no error, just an empty match)."""
+    if pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
 def get_client_name(class_id, dimensions_df):
-    client_row = dimensions_df[dimensions_df.iloc[:, 0] == class_id]
+    normalized_target = _normalize_id(class_id)
+    normalized_ids = dimensions_df.iloc[:, 0].apply(_normalize_id)
+    client_row = dimensions_df[normalized_ids == normalized_target]
     if not client_row.empty:
         return client_row.iloc[0, 1]
+    print(f"⚠️ get_client_name: no Dimensions row matched Class ID '{class_id}' "
+          f"(normalized: '{normalized_target}') — check the Client Dimensions sheet "
+          f"for an exact or near-match entry")
     return "Unknown_Client"
 
 
@@ -336,10 +400,24 @@ def find_file_id_by_s3_key(s3_key):
 def validate_units(report_df, units_df):
     report_df["Unit Code"] = report_df.iloc[:, 6].str.split().str[0]
     billable_codes = set(units_df.iloc[:, 0].astype(str))
-    report_df = report_df[report_df["Unit Code"].isin(billable_codes)]
-    missing_units = set(report_df["Unit Code"]) - billable_codes
+
+    # BUG FIX: previously this filtered report_df down to only the rows whose
+    # Unit Code was already in billable_codes BEFORE computing missing_units.
+    # That meant missing_units was always the empty set by construction (every
+    # surviving row was, by definition, already in billable_codes), so the
+    # ValueError below could never fire. Any row with an unrecognised Unit
+    # Code was silently dropped with no error, warning, or log line at all —
+    # e.g. rows for R148/R119/R141 vanishing from a file while R137 processed
+    # normally, with nothing in the logs to indicate they'd been discarded.
+    # Fixed by computing missing_units from the FULL (unfiltered) data first.
+    all_units = set(report_df["Unit Code"])
+    missing_units = all_units - billable_codes
     if missing_units:
+        missing_row_count = report_df[report_df["Unit Code"].isin(missing_units)].shape[0]
+        print(f"❌ Found {missing_row_count} row(s) with unit codes not present in the billing matrix: {missing_units}")
         raise ValueError(f"Missing units: {missing_units}")
+
+    report_df = report_df[report_df["Unit Code"].isin(billable_codes)]
     return report_df
 
 
@@ -374,14 +452,20 @@ def add_dimension_columns(data_df, units_df, dimensions_df):
     units_lookup.columns = ["Unit Code", "Invoice_Grouping_Type", "Email_Grouping_Type"]
     data_df = data_df.merge(units_lookup, on="Unit Code", how="left")
 
+    # Precomputed once (not per-row) for efficiency: normalized Class IDs from
+    # the Dimensions sheet, so lookups below are robust to whitespace/type
+    # mismatches instead of relying on brittle exact '==' comparison.
+    normalized_dim_ids = dimensions_df.iloc[:, 0].apply(_normalize_id)
+
     for index, row in data_df.iterrows():
         grouping_type = row["Invoice_Grouping_Type"]
         class_id = row["Class ID"]
-        dim_row = dimensions_df[dimensions_df.iloc[:, 0] == class_id]
+        normalized_class_id = _normalize_id(class_id)
+        dim_row = dimensions_df[normalized_dim_ids == normalized_class_id]
 
         if dim_row.empty:
             print(f"⚠️ No dimension row found for Class ID '{class_id}' "
-                  f"(Unit Code: {row['Unit Code']}). "
+                  f"(normalized: '{normalized_class_id}', Unit Code: {row['Unit Code']}). "
                   f"Falling back to Class ID as Invoice Grouping Code.")
             data_df.at[index, "Invoice Grouping Code"] = class_id
             data_df.at[index, "Invoice Grouping Name"] = class_id
@@ -634,6 +718,72 @@ def get_payment_terms(unit_code, billing_matrix_df):
     return 30
 
 
+SPLIT_BY_CENTRE_COLUMN_NAME = "Split invoice lines by centre"
+
+
+def _find_split_by_centre_column(billing_matrix_df):
+    """Locate the 'Split invoice lines by centre' column by header text
+    (case-insensitive, whitespace-normalised) rather than a hardcoded column
+    position, so the flag keeps working even if columns are inserted/reordered
+    in the billing matrix. Falls back to column U (index 20) with a warning if
+    no header matches, so existing behaviour doesn't silently break.
+    """
+    target = SPLIT_BY_CENTRE_COLUMN_NAME.strip().lower()
+    for col in billing_matrix_df.columns:
+        if str(col).strip().lower() == target:
+            return col
+    print(f"⚠️ Could not find column header '{SPLIT_BY_CENTRE_COLUMN_NAME}' in billing matrix, "
+          f"falling back to column U (index 20) by position")
+    return billing_matrix_df.columns[20]
+
+
+def should_split_memo_by_d4(unit_code, billing_matrix_df):
+    """Look up the 'Split invoice lines by centre' column (Column U) of the
+    billing matrix 'Units' sheet for this unit code.
+
+    When TRUE (accepts TRUE/FALSE, True/False, YES/NO, or 1/0), memo-line
+    generation must split by Dimension 4 (Cost Centre) — reusing the same
+    per-D4 grouping routine normally applied only when
+    Invoice_Grouping_Type == 'Group' — regardless of the invoice's actual
+    Invoice_Grouping_Type. This affects ONLY the memo-line breakdown; the
+    invoice header/grouping itself continues to be driven exclusively by
+    Invoice_Grouping_Type (see create_invoice_template's outer groupby).
+
+    Same prefix-fallback matching as get_payment_terms, since unit codes can
+    be hierarchical (e.g. 'ABC/123' falling back to 'ABC').
+
+    Returns False (unchanged/default behaviour) if the unit code isn't found
+    or the flag is blank.
+    """
+    parts = unit_code.split('/')
+    candidates = [unit_code]
+    for i in range(len(parts) - 1, 0, -1):
+        prefix = '/'.join(parts[:i])
+        if prefix != unit_code:
+            candidates.append(prefix)
+
+    col_a = billing_matrix_df.iloc[:, 0].astype(str)
+    split_col = _find_split_by_centre_column(billing_matrix_df)
+
+    for candidate in candidates:
+        billing_row = billing_matrix_df[col_a == candidate]
+        if not billing_row.empty:
+            col_u_value = billing_row.iloc[0][split_col]
+            if pd.isna(col_u_value) or col_u_value == '':
+                continue
+            if isinstance(col_u_value, bool):
+                result = col_u_value
+            elif isinstance(col_u_value, (int, float)):
+                result = col_u_value == 1
+            else:
+                result = str(col_u_value).strip().upper() in ("TRUE", "YES", "1")
+            print(f"🔀 Split-by-centre flag for '{candidate}' (from unit code '{unit_code}'): {result}")
+            return result
+
+    print(f"⚠️ No Column U value found for unit code '{unit_code}' (tried: {candidates}), defaulting to False")
+    return False
+
+
 def create_invoice_template(data_df, units_df, mark_up_adjustments_df, processed_date):
     invoice_lines = []
 
@@ -657,12 +807,10 @@ def create_invoice_template(data_df, units_df, mark_up_adjustments_df, processed
         else:
             print(f"📋 Billing group {grouping_id} to customer: {customer_id}")
 
-        min_date = group["Date"].min()
-        if pd.isna(min_date):
+        posting_date = get_majority_month_posting_date(group["Date"], grouping_id)
+        if posting_date is None:
             posting_date = eom_date(datetime.now())
             print(f"⚠️ Warning: No valid dates for group {grouping_id}, using current date")
-        else:
-            posting_date = eom_date(min_date)
 
         created_date = posting_date
 
@@ -682,7 +830,17 @@ def create_invoice_template(data_df, units_df, mark_up_adjustments_df, processed
         gl_code        = get_gl_code(dimension_type)
         grouping_type  = group["Invoice_Grouping_Type"].iloc[0] if "Invoice_Grouping_Type" in group.columns else None
 
-        if grouping_type == "Group":
+        # --- Column U trigger: split memo lines by Dimension 4 (Cost Centre) ---
+        # Invoice-level grouping above (groupby("Invoice Grouping Code")) is
+        # untouched and still follows the actual Invoice_Grouping_Type. This
+        # flag only decides which branch below builds the memo lines.
+        column_u_split = should_split_memo_by_d4(unit_code_for_lookup, billing_matrix_df) if unit_code_for_lookup else False
+        split_by_d4 = (grouping_type == "Group") or column_u_split
+        if column_u_split and grouping_type != "Group":
+            print(f"🔀 Group '{grouping_id}': Column U=TRUE, splitting memo lines by D4 "
+                  f"despite Invoice_Grouping_Type='{grouping_type}' (invoice grouping unaffected)")
+
+        if split_by_d4:
 
             d2_name          = group["Invoice Grouping Name"].iloc[0] if "Invoice Grouping Name" in group.columns else grouping_id
             period_code      = group["Period Code"].iloc[0] if "Period Code" in group.columns else None
