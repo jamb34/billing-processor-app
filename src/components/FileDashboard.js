@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+ import React, { useState, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import { post } from 'aws-amplify/api';
 import { Amplify } from 'aws-amplify';
@@ -484,7 +484,7 @@ const FileDashboard = ({ user }) => {
               }}
               title={`Click to download ${file.downloadUrls.length} files`}
               >
-                📥 Download ({file.downloadUrls.length})
+                Download ({file.downloadUrls.length})
               </span>
             )}
             
@@ -504,7 +504,7 @@ const FileDashboard = ({ user }) => {
                     fontWeight: 'bold'
                   }}
                 >
-                  ✅ Approve
+                  Approve
                 </button>
                 <button
                   onClick={() => onDeny && onDeny(file.id)}
@@ -540,7 +540,7 @@ const FileDashboard = ({ user }) => {
                   marginTop: '5px'
                 }}
               >
-                📤 Send to Box
+                Send to Box
               </button>
             )}
             
@@ -566,7 +566,7 @@ const FileDashboard = ({ user }) => {
                 color: 'white',
                 backgroundColor: '#0061d5'
               }}>
-                📦 In Box
+                In Box
               </span>
             )}
           </div>
@@ -579,7 +579,7 @@ const FileDashboard = ({ user }) => {
     <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>📊 File Processing Dashboard</h2>
+        <h2>File Processing Dashboard</h2>
         <div>
           <button 
             onClick={fetchFiles}
@@ -672,10 +672,10 @@ const FileDashboard = ({ user }) => {
             margin: 0
           }}>
             {activeFilter === 'ALL' && '📁 All Files'}
-            {activeFilter === 'AWAITING' && '⏳ Files Awaiting Approval'}
-            {activeFilter === 'APPROVED' && '✅ Approved Files'}
-            {activeFilter === 'REJECTED' && '❌ Rejected Files'}
-            {activeFilter === 'PROCESSED' && '⚡ Processed Files'}
+            {activeFilter === 'AWAITING' && 'Files Awaiting Approval'}
+            {activeFilter === 'APPROVED' && 'Approved Files'}
+            {activeFilter === 'REJECTED' && 'Rejected Files'}
+            {activeFilter === 'PROCESSED' && 'Processed Files'}
             <span style={{ fontSize: '14px', color: '#6c757d', marginLeft: '10px' }}>
               ({getFilteredFiles().length} files)
             </span>

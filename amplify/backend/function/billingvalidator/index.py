@@ -108,14 +108,131 @@ def calculate_tax_split(gross_amount, tax_amount):
     return round(net_0, 2), round(net_20, 2), round(tax_amount, 2)
 
 
+# ---------------------------------------------------------------------------
+# GL code resolution
+# ---------------------------------------------------------------------------
+# The GL code is derived ONLY from the 'D1 Name' column of the 'Dimensions'
+# sheet in "Client Dimensions - Sage version.xlsx", looked up by Class ID.
+# That text must contain one of Education / Care / Leisure / Contractor.
+# There is no other source and no default: if the type can't be determined
+# the run fails with an error naming the Class ID.
+#
+# Header matched by text (case-insensitive, whitespace-normalised), not position.
+D1_NAME_COLUMN_NAME = "D1 Name"
+
+# Dimension type -> GL code. Keys are stored normalised (casefolded/stripped).
+GL_CODES_BY_DIMENSION = {
+    "education": 4000,
+    "care": 4001,
+    "leisure": 4002,
+    "contractor": 4003,
+}
+
+# Whole-word match, tolerating a plural ("Contractors"). Whole-word matching
+# stops e.g. "Career Services" being read as "Care".
+_DIMENSION_TYPE_PATTERN = re.compile(r'\b(education|care|leisure|contractor)s?\b', re.IGNORECASE)
+
+
 def get_gl_code(dimension_type):
-    gl_codes = {
-        "Education": 4000,
-        "Care": 4001,
-        "Leisure": 4002,
-        "Contractor": 4003
-    }
-    return gl_codes.get(dimension_type, 4000)
+    """Map a dimension type (e.g. 'Education') to its GL code.
+
+    BUG FIX: previously this ended with gl_codes.get(dimension_type, 4000),
+    which silently booked ANY unrecognised, misspelled, differently-cased or
+    missing dimension type to 4000 (Education) instead of failing. It now
+    normalises the input (strip + casefold) and raises a ValueError for
+    missing/unknown values so bad data is caught rather than posted to the
+    wrong ledger account.
+    """
+    if dimension_type is None or pd.isna(dimension_type) or not str(dimension_type).strip():
+        raise ValueError("Dimension type is missing, so GL code cannot be determined.")
+
+    normalized_type = str(dimension_type).strip().casefold()
+    if normalized_type not in GL_CODES_BY_DIMENSION:
+        raise ValueError(f"Unknown dimension type: {dimension_type!r}")
+
+    return GL_CODES_BY_DIMENSION[normalized_type]
+
+
+def _find_column_by_header(df, header_text):
+    """Return the column label whose header matches header_text
+    (case-insensitive, whitespace-normalised), or None if there isn't one."""
+    target = header_text.strip().lower()
+    for col in df.columns:
+        if str(col).strip().lower() == target:
+            return col
+    return None
+
+
+def infer_dimension_type_from_text(text):
+    """Find Education/Care/Leisure/Contractor inside free text such as a D1 Name.
+    Returns the lower-case type, or None if no type word is present.
+    Raises ValueError if the text names MORE than one type, because guessing
+    between them would risk posting to the wrong ledger account."""
+    if text is None or pd.isna(text):
+        return None
+    matches = {m.group(1).casefold() for m in _DIMENSION_TYPE_PATTERN.finditer(str(text))}
+    if not matches:
+        return None
+    if len(matches) > 1:
+        raise ValueError(f"Ambiguous dimension type in text {text!r}: matches {sorted(matches)}")
+    return matches.pop()
+
+
+def resolve_gl_code(class_id, dimensions_df):
+    """Resolve the GL code for a client (Class ID) from the 'D1 Name' column
+    of the Client Dimensions sheet. This is the ONLY source of the GL code.
+
+    Steps:
+      1. Find the 'D1 Name' column by header.
+      2. Find the Dimensions row for the Class ID (whitespace/type-safe match).
+      3. Read the dimension type (Education/Care/Leisure/Contractor) from the
+         D1 Name text.
+      4. Map the type to its GL code via get_gl_code().
+
+    Raises ValueError (naming the Class ID) if the column, the row or a
+    dimension type can't be found, or if the D1 Name names more than one
+    type. It never defaults to a GL code.
+    """
+    d1_col = _find_column_by_header(dimensions_df, D1_NAME_COLUMN_NAME)
+    if d1_col is None:
+        raise ValueError(
+            f"Cannot determine GL code: no '{D1_NAME_COLUMN_NAME}' column found in the Dimensions sheet"
+        )
+
+    normalized_ids = dimensions_df.iloc[:, 0].apply(_normalize_id)
+    dim_row = dimensions_df[normalized_ids == _normalize_id(class_id)]
+    if dim_row.empty:
+        raise ValueError(
+            f"Cannot determine GL code: Class ID '{class_id}' not found in the Dimensions sheet"
+        )
+
+    d1_name = dim_row.iloc[0][d1_col]
+    dimension_type = infer_dimension_type_from_text(d1_name)
+    if dimension_type is None:
+        raise ValueError(
+            f"Cannot determine GL code for Class ID '{class_id}': '{D1_NAME_COLUMN_NAME}' value {d1_name!r} "
+            f"doesn't contain Education, Care, Leisure or Contractor"
+        )
+
+    gl_code = get_gl_code(dimension_type)
+    print(f"🧾 GL code for Class ID '{class_id}': {gl_code} "
+          f"('{D1_NAME_COLUMN_NAME}' {d1_name!r} -> '{dimension_type}')")
+    return gl_code
+
+
+def resolve_gl_code_for_group(group, dimensions_df, grouping_id):
+    """Resolve the GL code for an invoice group. An invoice header carries a
+    single GL code, so if the group contains Class IDs that resolve to
+    DIFFERENT GL codes, this warns loudly and uses the first row's code
+    (matching the previous 'first row in the group' behaviour)."""
+    class_ids = list(dict.fromkeys(group["Class ID"]))
+    gl_by_class = {cls: resolve_gl_code(cls, dimensions_df) for cls in class_ids}
+
+    if len(set(gl_by_class.values())) > 1:
+        print(f"⚠️ Group '{grouping_id}' spans Class IDs with different GL codes {gl_by_class}; "
+              f"using {gl_by_class[class_ids[0]]} from Class ID '{class_ids[0]}' for the whole invoice")
+
+    return gl_by_class[class_ids[0]]
 
 
 def _normalize_id(value):
@@ -335,6 +452,27 @@ def get_file_id_from_s3_metadata(bucket, key):
         return None
 
 
+def scan_dynamodb_items(table, **scan_kwargs):
+    """Yield items across all DynamoDB scan pages.
+
+    Continues even when a filtered page returns no matching Items, stopping
+    only when DynamoDB provides no LastEvaluatedKey.
+    """
+    request_kwargs = dict(scan_kwargs)
+
+    while True:
+        response = table.scan(**request_kwargs)
+
+        for item in response.get('Items', []):
+            yield item
+
+        last_evaluated_key = response.get('LastEvaluatedKey')
+        if not last_evaluated_key:
+            break
+
+        request_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+
 def find_file_id_by_s3_key(s3_key):
     try:
         table_name = os.environ.get('FILE_METADATA_TABLE')
@@ -344,62 +482,105 @@ def find_file_id_by_s3_key(s3_key):
 
         print(f"🔍 Searching DynamoDB for S3 key: {s3_key}")
         table = dynamodb.Table(table_name)
+        Attr = boto3.dynamodb.conditions.Attr
 
-        response = table.scan(
-            FilterExpression=boto3.dynamodb.conditions.Attr('s3Key').eq(s3_key)
-        )
-        if response['Items'] and len(response['Items']) > 0:
-            file_id = response['Items'][0]['id']
+        # 1. Search all pages for the exact S3 key.
+        for item in scan_dynamodb_items(table, FilterExpression=Attr('s3Key').eq(s3_key)):
+            file_id = item['id']
             print(f"✅ Found file by exact s3Key match: {file_id}")
             return file_id
 
+        # 2. Search all pages using the alternate public/ prefix.
         if not s3_key.startswith('public/'):
             s3_key_with_public = 'public/' + s3_key
             print(f"🔍 Also trying WITH 'public/' prefix: {s3_key_with_public}")
-            response = table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('s3Key').eq(s3_key_with_public)
-            )
-            if response['Items'] and len(response['Items']) > 0:
-                file_id = response['Items'][0]['id']
+
+            for item in scan_dynamodb_items(table, FilterExpression=Attr('s3Key').eq(s3_key_with_public)):
+                file_id = item['id']
                 print(f"✅ Found file WITH 'public/' prefix: {file_id}")
                 return file_id
-
-        elif s3_key.startswith('public/'):
+        else:
             s3_key_without_public = s3_key[7:]
             print(f"🔍 Also trying WITHOUT 'public/' prefix: {s3_key_without_public}")
-            response = table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('s3Key').eq(s3_key_without_public)
-            )
-            if response['Items'] and len(response['Items']) > 0:
-                file_id = response['Items'][0]['id']
+
+            for item in scan_dynamodb_items(table, FilterExpression=Attr('s3Key').eq(s3_key_without_public)):
+                file_id = item['id']
                 print(f"✅ Found file WITHOUT 'public/' prefix: {file_id}")
                 return file_id
 
+        # 3. Search all pages for the filename.
         print("❌ No exact s3Key match found, trying filename match...")
         filename = s3_key.split('/')[-1]
-        response = table.scan(
-            FilterExpression=boto3.dynamodb.conditions.Attr('fileName').eq(filename)
-        )
-        if response['Items'] and len(response['Items']) > 0:
-            file_id = response['Items'][0]['id']
+
+        for item in scan_dynamodb_items(table, FilterExpression=Attr('fileName').eq(filename)):
+            file_id = item['id']
             print(f"✅ Found file by filename match: {file_id}")
             return file_id
 
-        print(f"❌ No file found for S3 key: {s3_key}")
+        # 4. Paginate the diagnostic listing to show all items correctly.
+        print(f"❌ No file found for s3Key: {s3_key}")
         print("📊 Available files in DynamoDB:")
-        all_files = table.scan()
-        for item in all_files['Items']:
+        item_count = 0
+        for item in scan_dynamodb_items(table):
             print(f"   - {item.get('fileName', 'N/A')} -> s3Key: {item.get('s3Key', 'N/A')}")
+            item_count += 1
+        print(f"📊 Total files listed: {item_count}")
         return None
 
     except Exception as e:
         print(f"❌ Error finding file ID: {str(e)}")
         return None
 
+def _normalize_unit_code(value):
+    """Build a comparison key for a unit code so spelling differences that don't
+    change which unit it is can still be matched. The key:
+      - ignores case and whitespace, and
+      - ignores a '/' that sits directly before a LETTER.
+    e.g. '758/1964/N', '758/1964N' and '758/1964n' all become '758/1964N'.
+
+    Deliberately NOT ignored: a '/' between digits. '751/1941/5' and
+    '751/19415' are different units and must never be matched to each other.
+    Returns "" for blank values (which never match anything)."""
+    if pd.isna(value):
+        return ""
+    text = re.sub(r'\s+', '', str(value)).upper()
+    return re.sub(r'/(?=[A-Z])', '', text)
+
 
 def validate_units(report_df, units_df):
     report_df["Unit Code"] = report_df.iloc[:, 6].str.split().str[0]
     billable_codes = set(units_df.iloc[:, 0].astype(str))
+
+    # Normalised matching fallback. An exact match always wins. Only report
+    # codes with NO exact match are compared by normalised key (see
+    # _normalize_unit_code), and only accepted if exactly ONE matrix code has
+    # that key. Matched rows have their Unit Code replaced with the matrix's own
+    # spelling, so every later lookup (grouping types, payment terms, split
+    # flag, mark-up key, email structure) sees one consistent code.
+    matrix_by_key = {}
+    for matrix_code in units_df.iloc[:, 0].dropna().astype(str):
+        key = _normalize_unit_code(matrix_code)
+        if key:
+            matrix_by_key.setdefault(key, set()).add(matrix_code)
+
+    resolved_units = {}
+    ambiguous_units = {}
+    for code in set(report_df["Unit Code"]) - billable_codes:
+        key = _normalize_unit_code(code)
+        candidates = matrix_by_key.get(key, set()) if key else set()
+        if len(candidates) == 1:
+            resolved_units[code] = next(iter(candidates))
+            print(f"⚠️ Unit '{code}' not found exactly in the billing matrix; matched "
+                  f"'{resolved_units[code]}' by normalised comparison")
+        elif len(candidates) > 1:
+            ambiguous_units[code] = sorted(candidates)
+
+    if ambiguous_units:
+        print(f"❌ Unit codes matching more than one billing matrix entry: {ambiguous_units}")
+        raise ValueError(f"Ambiguous units (match more than one matrix entry): {ambiguous_units}")
+
+    if resolved_units:
+        report_df["Unit Code"] = report_df["Unit Code"].map(lambda c: resolved_units.get(c, c))
 
     # BUG FIX: previously this filtered report_df down to only the rows whose
     # Unit Code was already in billable_codes BEFORE computing missing_units.
@@ -784,7 +965,7 @@ def should_split_memo_by_d4(unit_code, billing_matrix_df):
     return False
 
 
-def create_invoice_template(data_df, units_df, mark_up_adjustments_df, processed_date):
+def create_invoice_template(data_df, units_df, mark_up_adjustments_df, processed_date, dimensions_df):
     invoice_lines = []
 
     billing_matrix_df = load_from_s3(CONFIG_BUCKET, "Client Billing Matrix - Sage Version.xlsx", "Units")
@@ -826,8 +1007,9 @@ def create_invoice_template(data_df, units_df, mark_up_adjustments_df, processed
         created_date_str = created_date.strftime("%d/%m/%Y") if created_date else ""
         due_date_str     = due_date.strftime("%d/%m/%Y")
 
-        dimension_type = determine_dimension_type(group["Unit Code"].iloc[0], units_df)
-        gl_code        = get_gl_code(dimension_type)
+        # GL code comes ONLY from the D1 Name in the Dimensions sheet, per
+        # Class ID (see resolve_gl_code). No default, no other source.
+        gl_code        = resolve_gl_code_for_group(group, dimensions_df, grouping_id)
         grouping_type  = group["Invoice_Grouping_Type"].iloc[0] if "Invoice_Grouping_Type" in group.columns else None
 
         # --- Column U trigger: split memo lines by Dimension 4 (Cost Centre) ---
@@ -1021,27 +1203,6 @@ def create_invoice_template(data_df, units_df, mark_up_adjustments_df, processed
     return pd.DataFrame(invoice_lines)
 
 
-def determine_dimension_type(unit_code, units_df):
-    """Determine dimension type by exact unit code match in the billing matrix (column A),
-    then read the unit name (column B). Never uses prefix/substring matching on the code."""
-    unit_row = units_df[units_df.iloc[:, 0].astype(str) == str(unit_code)]
-    if not unit_row.empty:
-        unit_name = str(unit_row.iloc[0, 1])
-        if "Education" in unit_name:
-            return "Education"
-        elif "Care" in unit_name:
-            return "Care"
-        elif "Leisure" in unit_name:
-            return "Leisure"
-        elif "Contractor" in unit_name:
-            return "Contractor"
-        else:
-            print(f"⚠️ Unit '{unit_code}' has unrecognised name '{unit_name}', defaulting to Education")
-    else:
-        print(f"⚠️ Unit code '{unit_code}' not found in billing matrix, defaulting to Education")
-    return "Education"
-
-
 def create_email_structure(data_df, summaries, output_bucket, dimensions_df):
     email_structure = []
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1140,7 +1301,7 @@ def lambda_handler(event, context):
         report_df          = validate_units(report_df, units_df)
         data_df            = create_data_sheet(report_df, units_df, dimensions_df)
         summaries          = generate_summary_sheets(data_df, units_df, mark_up_adjustments_df, dimensions_df)
-        invoice_df         = create_invoice_template(data_df, units_df, mark_up_adjustments_df, processed_date)
+        invoice_df         = create_invoice_template(data_df, units_df, mark_up_adjustments_df, processed_date, dimensions_df)
         email_structure_df = create_email_structure(data_df, summaries, OUTPUT_BUCKET, dimensions_df)
 
         timestamp       = processed_date.strftime("%Y%m%d_%H%M%S")
