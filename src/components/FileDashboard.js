@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import { post } from 'aws-amplify/api';
 import { Amplify } from 'aws-amplify';
@@ -338,10 +338,11 @@ const FileDashboard = ({ user }) => {
   if (loading) {
     return (
       <div style={{ 
-        padding: '40px', 
+        padding: '64px 40px', 
         textAlign: 'center',
         fontSize: '18px',
-        color: '#666'
+        color: '#666',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
       }}>
         🔄 Loading files...
       </div>
@@ -351,25 +352,32 @@ const FileDashboard = ({ user }) => {
   if (error && files.length === 0) {
     return (
       <div style={{ 
-        padding: '20px', 
-        margin: '20px',
+        padding: '24px 28px', 
+        margin: '24px',
         backgroundColor: '#f8d7da',
         border: '1px solid #f5c6cb',
-        borderRadius: '4px',
-        color: '#721c24'
+        borderRadius: '12px',
+        color: '#721c24',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+        lineHeight: 1.5,
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
       }}>
         <h3>❌ Error Loading Files</h3>
         <p>{error}</p>
         <button 
           onClick={fetchFiles}
           style={{
-            padding: '10px 15px',
+            padding: '10px 18px',
             backgroundColor: '#dc3545',
             color: 'white',
             border: 'none',
-            borderRadius: '4px',
+            borderRadius: '8px',
             cursor: 'pointer',
-            marginTop: '10px'
+            marginTop: '10px',
+            fontSize: '14px',
+            fontWeight: 600,
+            letterSpacing: '0.3px',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
           }}
         >
           Try Again
@@ -400,54 +408,55 @@ const FileDashboard = ({ user }) => {
 
     return (
       <div key={file.id} style={{
-        padding: '15px',
+        padding: '20px 24px',
         backgroundColor: 'white',
-        borderRadius: '8px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        borderRadius: '12px',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
         border: '1px solid #e1e1e1',
         marginBottom: '10px'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px' }}>
           <div style={{ flex: 1 }}>
-            <h4 style={{ margin: '0 0 5px 0', color: '#122143' }}>{fileName}</h4>
-            <div style={{ fontSize: '12px', color: '#6c757d' }}>
-              <p style={{ margin: '2px 0' }}>
+            <h4 style={{ margin: '0 0 8px 0', color: '#122143', fontSize: '16px', fontWeight: 600 }}>{fileName}</h4>
+            <div style={{ fontSize: '12px', color: '#6c757d', lineHeight: 1.6 }}>
+              <p style={{ margin: '3px 0' }}>
                 <strong>Uploaded:</strong> {uploadDate}
                 {createdBy && createdBy !== 'Unknown' && ` by ${createdBy}`}
               </p>
 
               {/* NEW: Download status info */}
               {file.status === 'PROCESSED' && hasDownloads && (
-                <p style={{ margin: '2px 0', color: '#28a745', fontSize: '11px' }}>
+                <p style={{ margin: '3px 0', color: '#28a745', fontSize: '11px', fontWeight: 600 }}>
                   ✅ {file.downloadUrls.length} files ready for download
                 </p>
               )}
               {file.status === 'PROCESSED' && !hasDownloads && (
-                <p style={{ margin: '2px 0', color: '#ffc107', fontSize: '11px' }}>
+                <p style={{ margin: '3px 0', color: '#ffc107', fontSize: '11px', fontWeight: 600 }}>
                   ⏳ Processing downloads...
                 </p>
               )}
 
               {/* NEW: Box status line */}
-              <p style={{ margin: '2px 0' }}>
+              <p style={{ margin: '3px 0' }}>
                 <strong>Box:</strong>{' '}
                 {isInBox
                   ? `Uploaded${boxUploadedAt ? ` on ${boxUploadedAt}` : ''}`
                   : 'Not uploaded'}
               </p>
 
-              <p style={{ margin: '2px 0', fontFamily: 'monospace', fontSize: '11px' }}>
+              <p style={{ margin: '3px 0', fontFamily: 'monospace', fontSize: '11px' }}>
                 <strong>ID:</strong> {file.id.substring(0, 12)}...
               </p>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
             <span style={{
-              padding: '4px 8px',
-              borderRadius: '12px',
+              padding: '4px 12px',
+              borderRadius: '999px',
               color: 'white',
               fontSize: '11px',
               fontWeight: 'bold',
+              letterSpacing: '0.4px',
               backgroundColor: status === 'PROCESSED' ? '#28a745' : 
                                status === 'PROCESSING' ? '#ffc107' : 
                                status === 'FAILED' ? '#dc3545' : '#007bff'
@@ -458,14 +467,16 @@ const FileDashboard = ({ user }) => {
             {/* NEW: Download button for processed files */}
             {file.status === 'PROCESSED' && hasDownloads && (
               <span style={{
-                padding: '4px 8px',
-                borderRadius: '12px',
+                padding: '4px 12px',
+                borderRadius: '999px',
                 color: 'white',
                 fontSize: '11px',
                 fontWeight: 'bold',
+                letterSpacing: '0.4px',
                 backgroundColor: '#17a2b8',
                 cursor: 'pointer',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
               }}
               onClick={() => {
                 // Manual download trigger with delay
@@ -494,14 +505,16 @@ const FileDashboard = ({ user }) => {
                 <button
                   onClick={() => onApprove && onApprove(file.id)}
                   style={{
-                    padding: '6px 12px',
+                    padding: '7px 16px',
                     backgroundColor: '#28a745',
                     color: 'white',
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '12px',
-                    fontWeight: 'bold'
+                    fontWeight: 'bold',
+                    letterSpacing: '0.3px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
                   }}
                 >
                   Approve
@@ -509,14 +522,16 @@ const FileDashboard = ({ user }) => {
                 <button
                   onClick={() => onDeny && onDeny(file.id)}
                   style={{
-                    padding: '6px 12px',
+                    padding: '7px 16px',
                     backgroundColor: '#dc3545',
                     color: 'white',
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '12px',
-                    fontWeight: 'bold'
+                    fontWeight: 'bold',
+                    letterSpacing: '0.3px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
                   }}
                 >
                   ❌ Deny
@@ -529,14 +544,16 @@ const FileDashboard = ({ user }) => {
               <button
                 onClick={() => onSendToBox && onSendToBox(file.id)}
                 style={{
-                  padding: '6px 12px',
+                  padding: '7px 16px',
                   backgroundColor: '#0061D5',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   cursor: 'pointer',
                   fontSize: '12px',
                   fontWeight: 'bold',
+                  letterSpacing: '0.3px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
                   marginTop: '5px'
                 }}
               >
@@ -545,11 +562,12 @@ const FileDashboard = ({ user }) => {
             )}
             
             <span style={{
-              padding: '4px 8px',
-              borderRadius: '12px',
+              padding: '4px 12px',
+              borderRadius: '999px',
               color: 'white',
               fontSize: '11px',
               fontWeight: 'bold',
+              letterSpacing: '0.4px',
               backgroundColor: approvalStatus === 'APPROVED' ? '#28a745' : 
                                approvalStatus === 'REJECTED' ? '#dc3545' : '#ffc107'
             }}>
@@ -559,10 +577,11 @@ const FileDashboard = ({ user }) => {
             {/* NEW: "In Box" badge — only shows when file is in Box */}
             {isInBox && (
               <span style={{
-                padding: '4px 8px',
-                borderRadius: '4px',
+                padding: '4px 10px',
+                borderRadius: '6px',
                 fontSize: '11px',
                 fontWeight: 'bold',
+                letterSpacing: '0.4px',
                 color: 'white',
                 backgroundColor: '#0061d5'
               }}>
@@ -576,21 +595,30 @@ const FileDashboard = ({ user }) => {
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{
+      padding: '32px 24px',
+      maxWidth: '1400px',
+      margin: '0 auto',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+    }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>File Processing Dashboard</h2>
-        <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+        <h2 style={{ margin: 0, fontSize: '26px', fontWeight: 600 }}>File Processing Dashboard</h2>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
           <button 
             onClick={fetchFiles}
             style={{
-              padding: '10px 15px',
+              padding: '10px 18px',
               backgroundColor: '#122143',
               color: 'white',
               border: 'none',
-              borderRadius: '4px',
+              borderRadius: '8px',
               cursor: 'pointer',
-              marginRight: '10px'
+              marginRight: '14px',
+              fontSize: '14px',
+              fontWeight: 600,
+              letterSpacing: '0.3px',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
             }}
           >
             🔄 Refresh
@@ -604,12 +632,14 @@ const FileDashboard = ({ user }) => {
       {/* Error warning if partial success */}
       {error && files.length > 0 && (
         <div style={{ 
-          padding: '10px 15px', 
+          padding: '14px 18px', 
           backgroundColor: '#fff3cd',
           border: '1px solid #ffeaa7',
-          borderRadius: '4px',
-          marginBottom: '20px',
-          color: '#856404'
+          borderRadius: '8px',
+          marginBottom: '24px',
+          color: '#856404',
+          fontSize: '14px',
+          lineHeight: 1.5
         }}>
           ⚠️ {error}
         </div>
@@ -619,8 +649,8 @@ const FileDashboard = ({ user }) => {
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', 
-        gap: '15px',
-        marginBottom: '30px'
+        gap: '16px',
+        marginBottom: '36px'
       }}>
         <StatCard 
           title="TOTAL FILES" 
@@ -669,14 +699,16 @@ const FileDashboard = ({ user }) => {
         }}>
           <h3 style={{ 
             color: '#122143', 
-            margin: 0
+            margin: 0,
+            fontSize: '20px',
+            fontWeight: 600
           }}>
             {activeFilter === 'ALL' && '📁 All Files'}
             {activeFilter === 'AWAITING' && 'Files Awaiting Approval'}
             {activeFilter === 'APPROVED' && 'Approved Files'}
             {activeFilter === 'REJECTED' && 'Rejected Files'}
             {activeFilter === 'PROCESSED' && 'Processed Files'}
-            <span style={{ fontSize: '14px', color: '#6c757d', marginLeft: '10px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 400, color: '#6c757d', marginLeft: '10px' }}>
               ({getFilteredFiles().length} files)
             </span>
           </h3>
@@ -687,11 +719,11 @@ const FileDashboard = ({ user }) => {
         
         {getFilteredFiles().length === 0 ? (
           <div style={{ 
-            padding: '40px', 
+            padding: '56px 40px', 
             textAlign: 'center', 
             backgroundColor: 'white',
-            borderRadius: '8px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            borderRadius: '12px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.08)'
           }}>
             <h3>No files found</h3>
             <p>
@@ -703,7 +735,7 @@ const FileDashboard = ({ user }) => {
             </p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: '15px' }}>
+          <div style={{ display: 'grid', gap: '16px' }}>
             {getFilteredFiles().map(file => (
               <FileCard 
                 key={file.id} 
@@ -725,19 +757,20 @@ const StatCard = ({ title, count, color, active, onClick }) => (
   <div 
     onClick={onClick}
     style={{ 
-      padding: '15px', 
+      padding: '20px 15px', 
       backgroundColor: color, 
       color: 'white', 
-      borderRadius: '8px', 
+      borderRadius: '12px', 
       textAlign: 'center',
       cursor: 'pointer',
       opacity: active ? 1 : 0.8,
       transform: active ? 'scale(1.02)' : 'scale(1)',
+      boxShadow: active ? '0 6px 16px rgba(0,0,0,0.25)' : '0 2px 8px rgba(0,0,0,0.12)',
       transition: 'all 0.2s'
     }}
   >
-    <h4 style={{ margin: '0 0 10px 0', fontSize: '14px' }}>{title}</h4>
-    <p style={{ fontSize: '28px', fontWeight: 'bold', margin: 0 }}>{count}</p>
+    <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 600, letterSpacing: '0.8px' }}>{title}</h4>
+    <p style={{ fontSize: '30px', fontWeight: 'bold', margin: 0 }}>{count}</p>
   </div>
 );
 

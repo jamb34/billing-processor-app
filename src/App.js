@@ -84,8 +84,9 @@ const styles = {
   header: {
     backgroundColor: '#122143',
     color: 'white',
-    padding: '10px 0',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    padding: '14px 0 0 0',
+    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   },
   headerContent: {
     maxWidth: '1200px',
@@ -93,24 +94,32 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '0 20px',
+    padding: '0 24px 14px 24px',
   },
   title: {
     margin: 0,
     fontSize: '24px',
+    fontWeight: 600,
+    letterSpacing: '0.3px',
   },
   userInfo: {
     display: 'flex',
     alignItems: 'center',
-    gap: '15px',
+    gap: '16px',
+    fontSize: '14px',
   },
   signOutButton: {
     backgroundColor: '#4FC3F7',
     color: 'white',
     border: 'none',
-    padding: '8px 16px',
-    borderRadius: '4px',
+    padding: '9px 18px',
+    borderRadius: '8px',
     cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    fontWeight: 600,
+    letterSpacing: '0.3px',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
   },
   nav: {
     display: 'flex',
@@ -120,13 +129,17 @@ const styles = {
     borderTop: '1px solid #dee2e6'
   },
   navButton: {
-    padding: '15px 30px',
+    padding: '16px 32px',
     backgroundColor: 'transparent',
     border: 'none',
     color: '#6c757d',
     cursor: 'pointer',
-    fontSize: '16px',
-    borderBottom: '3px solid transparent'
+    fontFamily: 'inherit',
+    fontSize: '15px',
+    fontWeight: 500,
+    letterSpacing: '0.2px',
+    borderBottom: '3px solid transparent',
+    transition: 'color 0.2s, border-color 0.2s'
   },
   activeNavButton: {
     color: '#122143',
@@ -136,7 +149,8 @@ const styles = {
   main: {
     maxWidth: '1200px',
     margin: '0 auto',
-    padding: '20px',
+    padding: '32px 24px',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   }
 };
 
