@@ -109,7 +109,7 @@ const FileUpload = () => {
 
   return (
     <div style={styles.container}>
-      <h2>Upload Billing File</h2>
+      <h2>Upload File</h2>
       <div style={styles.uploadArea}>
         <input 
           type="file" 
@@ -136,11 +136,11 @@ const FileUpload = () => {
       <div style={styles.instructions}>
         <h3>Billing Processor:</h3>
         <p><strong>Upload a Sage extract</strong> - The file will be automatically processed when dropped into the tool</p>
-        <p><strong>Go to the 📊 Processing Dashboard</strong> </p>
+        <p><strong>Go to the Processing Dashboard</strong> - View the status of your uploaded files</p>
         <p><strong>File collection</strong> - Download the files by clicking download next to the tile of your uploaded file</p>
         <p><strong>File inspection</strong> - View details of your processed files</p>
         <p><strong>Approve or reject</strong> - Approve or reject processed files in the dashboard tile</p>
-        <p><strong>If approved, upload to box button</strong> - A button to upload approved files to Box will appear in the dashboard</p>
+        <p><strong>If approved, upload to box button</strong> - Select the upload option for approved files</p>
       </div>
     </div>
   );
@@ -149,54 +149,70 @@ const FileUpload = () => {
 // Styles object
 const styles = {
   container: {
-    border: '2px dashed #ccc',
-    borderRadius: '8px',
-    padding: '40px',
+    border: '1px solid #e2e6ee',
+    borderRadius: '12px',
+    padding: '48px 40px',
     textAlign: 'center',
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#ffffff',
     maxWidth: '600px',
     margin: '0 auto',
+    boxShadow: '0 4px 24px rgba(18, 33, 67, 0.08)',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    color: '#2b3548',
   },
   uploadArea: {
-    margin: '20px 0',
+    margin: '28px 0',
+    padding: '32px 20px',
+    backgroundColor: '#f5f7fb',
+    border: '1px solid #e2e6ee',
+    borderRadius: '10px',
   },
   fileInput: {
     display: 'none',
   },
   uploadLabel: {
     display: 'inline-block',
-    padding: '12px 24px',
+    padding: '14px 32px',
     backgroundColor: '#122143',
-    color: 'white',
-    borderRadius: '4px',
+    color: '#ffffff',
+    borderRadius: '8px',
     cursor: 'pointer',
     fontSize: '16px',
-    transition: 'background-color 0.3s',
+    fontWeight: 600,
+    letterSpacing: '0.3px',
+    boxShadow: '0 2px 8px rgba(18, 33, 67, 0.25)',
+    transition: 'background-color 0.3s, box-shadow 0.3s, transform 0.2s',
   },
   message: {
-    margin: '20px 0',
-    padding: '15px',
-    borderRadius: '4px',
+    margin: '24px 0',
+    padding: '14px 18px',
+    borderRadius: '8px',
     fontSize: '14px',
+    lineHeight: 1.5,
+    textAlign: 'left',
   },
   successMessage: {
-    backgroundColor: '#d4edda',
-    border: '1px solid #c3e6cb',
-    color: '#155724',
+    backgroundColor: '#e8f6ec',
+    border: '1px solid #bfe3ca',
+    borderLeft: '4px solid #2e9e57',
+    color: '#1b5e35',
   },
   errorMessage: {
-    backgroundColor: '#f8d7da',
-    border: '1px solid #f5c6cb',
-    color: '#721c24',
+    backgroundColor: '#fdecee',
+    border: '1px solid #f3c2c8',
+    borderLeft: '4px solid #d9363e',
+    color: '#8a1c23',
   },
   instructions: {
-    marginTop: '30px',
+    marginTop: '32px',
     textAlign: 'left',
-    backgroundColor: 'white',
-    padding: '20px',
-    borderRadius: '4px',
-    border: '1px solid #ddd',
+    backgroundColor: '#f9fafc',
+    padding: '24px',
+    borderRadius: '10px',
+    border: '1px solid #e2e6ee',
     fontSize: '14px',
+    lineHeight: 1.7,
+    color: '#44506a',
   }
 };
 

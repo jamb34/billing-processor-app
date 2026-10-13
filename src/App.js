@@ -27,7 +27,7 @@ function App({ signOut, user }) {
     <div className="App">
       <header style={styles.header}>
         <div style={styles.headerContent}>
-          <h1 style={styles.title}>💳 Billing Processor</h1>
+          <h1 style={styles.title}>Billing Processor App</h1>
           <div style={styles.userInfo}>
             <span>Welcome, {user.username}</span>
             <button onClick={signOut} style={styles.signOutButton}>
@@ -54,7 +54,7 @@ function App({ signOut, user }) {
               ...(activeTab === 'dashboard' ? styles.activeNavButton : {})
             }}
           >
-            📊 Processing Dashboard
+            Processing Dashboard
           </button>
           {/*
           <button 
